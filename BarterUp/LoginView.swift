@@ -3,32 +3,19 @@ import FirebaseAuth
 import FirebaseCore
 
 struct LoginView: View {
-    @State private var email: String = ""
+    @EnvironmentObject var authManager: AuthenticationManager
+    @State private var username: String = ""
     @State private var password: String = ""
     @State private var errorMessage: String = ""
     @State private var isError: Bool = false
     @State private var isLoggedIn: Bool = false
     @MainActor @State private var shouldNavigateToHome: Bool = false
 
-    // Validate email format
-    private func isValidEmail(_ email: String) -> Bool {
-        let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
-        let emailPredicate = NSPredicate(format:"SELF MATCHES %@", emailRegex)
-        return emailPredicate.evaluate(with: email)
-    }
-
     // Validate input before attempting login
     private func validateInput() -> Bool {
-        // Check if email is empty
-        if email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            errorMessage = "Please enter an email address"
-            isError = true
-            return false
-        }
-        
-        // Check if email format is valid
-        if !isValidEmail(email) {
-            errorMessage = "Please enter a valid email address"
+        // Check if username is empty
+        if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errorMessage = "Please enter a username"
             isError = true
             return false
         }
@@ -58,11 +45,10 @@ struct LoginView: View {
                     .fontWeight(.bold)
                     .padding(.top, 60)
 
-                TextField("Email", text: $email)
+                TextField("Username", text: $username)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal, 20)
-                    .autocapitalization(.none) // Disable auto-capitalization
-                    .keyboardType(.emailAddress) // Set keyboard type to email
+                    .autocapitalization(.none)
 
                 SecureField("Password", text: $password)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -78,7 +64,7 @@ struct LoginView: View {
                 Button(action: {
                     Task {
                         if validateInput() {
-                            await login()
+                            await signInAnonymously()
                         }
                     }
                 }) {
@@ -101,12 +87,6 @@ struct LoginView: View {
                         .padding(.horizontal, 20)
                 }
 
-                Button("Create Test User") {
-                    Task {
-                        await createTestUser()
-                    }
-                }
-
                 Spacer()
             }
             .padding(.bottom, 40)
@@ -117,101 +97,26 @@ struct LoginView: View {
             .navigationDestination(isPresented: $shouldNavigateToHome) {
                 HomeView()
             }
-            .onAppear {
-                verifyFirebaseConfig()
-            }
         }
     }
 
     @MainActor
-    private func login() async {
+    private func signInAnonymously() async {
         do {
-            // First, ensure we're starting fresh
-            try? Auth.auth().signOut()
+            let result = try await Auth.auth().signInAnonymously()
+            let user = result.user
             
-            // Clear any previous errors
-            isError = false
-            errorMessage = ""
+            // Update the user's display name
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = username
+            try await changeRequest.commitChanges()
             
-            // Clean the email and password
-            let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            print("Attempting clean login with email: \(trimmedEmail)")
-            
-            // Attempt to fetch sign-in methods first
-            let methods = try await Auth.auth().fetchSignInMethods(forEmail: trimmedEmail)
-            print("Available sign-in methods: \(methods)")
-            
-            // Try to sign in
-            let authResult = try await Auth.auth().signIn(withEmail: trimmedEmail, password: trimmedPassword)
-            print("Login successful. User ID: \(authResult.user.uid)")
-            
+            print("User signed in anonymously with username: \(username)")
             shouldNavigateToHome = true
-            
         } catch {
-            print("Full error details: \(error)")
-            
-            let nsError = error as NSError
-            print("Error code: \(nsError.code)")
-            print("Error domain: \(nsError.domain)")
-            print("Error user info: \(nsError.userInfo)")
-            
-            switch nsError.code {
-            case AuthErrorCode.userNotFound.rawValue:
-                errorMessage = "No account found with this email. Please sign up first."
-            case AuthErrorCode.wrongPassword.rawValue:
-                errorMessage = "Incorrect password. Please try again."
-            case AuthErrorCode.invalidEmail.rawValue:
-                errorMessage = "Please enter a valid email address."
-            case AuthErrorCode.invalidCredential.rawValue:
-                errorMessage = "Invalid login credentials. Please try again."
-            default:
-                errorMessage = error.localizedDescription
-            }
-            
+            print("Error signing in: \(error.localizedDescription)")
+            errorMessage = "Error signing in. Please try again."
             isError = true
-        }
-    }
-
-    // Add this function to verify Firebase configuration
-    private func verifyFirebaseConfig() {
-        // Print current auth state
-        if let currentUser = Auth.auth().currentUser {
-            print("Current user exists: \(currentUser.uid)")
-            print("Current user email: \(currentUser.email ?? "No email")")
-        } else {
-            print("No current user")
-        }
-        
-        // Print Firebase configuration
-        if let bundleID = Bundle.main.bundleIdentifier {
-            print("Bundle ID: \(bundleID)")
-        }
-        
-        // Verify Firebase is configured
-        if Auth.auth() != nil {
-            print("Firebase Auth is initialized")
-        } else {
-            print("Firebase Auth is NOT initialized")
-        }
-    }
-
-    private func verifyUser(email: String) async {
-        do {
-            let methods = try await Auth.auth().fetchSignInMethods(forEmail: email)
-            print("Sign-in methods for \(email): \(methods)")
-        } catch {
-            print("Error verifying user: \(error.localizedDescription)")
-        }
-    }
-
-    private func createTestUser() async {
-        do {
-            try await Auth.auth().createUser(withEmail: "ben@gmail.com", password: "your_password")
-            print("Test user created successfully")
-        } catch {
-            print("Error creating test user: \(error.localizedDescription)")
         }
     }
 }

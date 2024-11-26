@@ -6,13 +6,15 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
-struct AuthenticationManager: View {
-    var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+class AuthenticationManager: ObservableObject {
+    @Published var isAuthenticated: Bool = false
+    
+    init() {
+        // Add state change listener
+        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+            self?.isAuthenticated = user != nil
+        }
     }
-}
-
-#Preview {
-    AuthenticationManager()
-}
+} 

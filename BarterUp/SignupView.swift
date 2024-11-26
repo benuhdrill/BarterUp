@@ -2,102 +2,81 @@ import SwiftUI
 import FirebaseAuth
 
 struct SignupView: View {
-    @State private var email: String = ""
+    @EnvironmentObject var authManager: AuthenticationManager
+    @State private var username: String = ""
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
-    @State private var skillsToOffer: [String] = []
-    @State private var skillsToLearn: [String] = []
-    @State private var newSkillToOffer: String = ""
-    @State private var newSkillToLearn: String = ""
     @State private var errorMessage: String = ""
     @State private var isError: Bool = false
-    @Environment(\.presentationMode) var presentationMode
+    @State private var shouldNavigateToHome: Bool = false
+    
+    private func validateInput() -> Bool {
+        // Check if username is empty
+        if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errorMessage = "Please enter a username"
+            isError = true
+            return false
+        }
+        
+        // Check if password is empty
+        if password.isEmpty {
+            errorMessage = "Please enter a password"
+            isError = true
+            return false
+        }
+        
+        // Check minimum password length
+        if password.count < 6 {
+            errorMessage = "Password must be at least 6 characters"
+            isError = true
+            return false
+        }
+        
+        // Check if passwords match
+        if password != confirmPassword {
+            errorMessage = "Passwords do not match"
+            isError = true
+            return false
+        }
+        
+        return true
+    }
     
     var body: some View {
-        ScrollView { // Use ScrollView for seamless scrolling
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Sign Up")
+        NavigationStack {
+            VStack(spacing: 30) {
+                Text("Create Account")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                    .padding(.top, 40)
+                    .padding(.top, 60)
                 
-                // Email Field
-                TextField("Email", text: $email)
+                TextField("Username", text: $username)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal, 20)
+                    .autocapitalization(.none)
                 
-                // Password Field
                 SecureField("Password", text: $password)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal, 20)
+                    .textContentType(.oneTimeCode)
                 
-                // Confirm Password Field
                 SecureField("Confirm Password", text: $confirmPassword)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal, 20)
+                    .textContentType(.oneTimeCode)
                 
-                // Skills to Offer
-                Text("Skills to Offer")
-                    .font(.headline)
-                    .padding(.horizontal, 20)
-                
-                ForEach(skillsToOffer, id: \.self) { skill in
-                    Text(skill)
-                        .padding(.horizontal, 20)
-                }
-                
-                HStack {
-                    TextField("Add a skill", text: $newSkillToOffer)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal, 20)
-                    
-                    Button(action: {
-                        if !newSkillToOffer.isEmpty {
-                            skillsToOffer.append(newSkillToOffer)
-                            newSkillToOffer = ""
-                        }
-                    }) {
-                        Text("Add")
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                // Skills to Learn
-                Text("Skills to Learn")
-                    .font(.headline)
-                    .padding(.horizontal, 20)
-                
-                ForEach(skillsToLearn, id: \.self) { skill in
-                    Text(skill)
-                        .padding(.horizontal, 20)
-                }
-                
-                HStack {
-                    TextField("Add a skill", text: $newSkillToLearn)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .padding(.horizontal, 20)
-                    
-                    Button(action: {
-                        if !newSkillToLearn.isEmpty {
-                            skillsToLearn.append(newSkillToLearn)
-                            newSkillToLearn = ""
-                        }
-                    }) {
-                        Text("Add")
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                // Error message
                 if isError {
                     Text(errorMessage)
                         .foregroundColor(.red)
-                        .padding()
+                        .padding(.horizontal, 20)
                 }
                 
-                // Sign Up Button
                 Button(action: {
-                    signUp()
+                    Task {
+                        if validateInput() {
+                            await signUpAnonymously()
+                        }
+                    }
                 }) {
                     Text("Sign Up")
                         .frame(maxWidth: .infinity)
@@ -107,51 +86,45 @@ struct SignupView: View {
                         .cornerRadius(10)
                         .padding(.horizontal, 20)
                 }
-                .padding(.bottom, 20)
-                
-                // Additional Information
-                Text("By signing up, you agree to our Terms and Conditions.")
-                    .font(.footnote)
-                    .foregroundColor(.gray)
-                    .padding(.horizontal, 20)
                 
                 Spacer()
             }
-            .padding()
+            .padding(.bottom, 40)
             .background(Color(UIColor.systemGroupedBackground))
             .edgesIgnoringSafeArea(.all)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-    
-    // Sign up function
-    private func signUp() {
-        guard password == confirmPassword else {
-            errorMessage = "Passwords do not match."
-            isError = true
-            return
-        }
-        
-        Auth.auth().createUser(withEmail: email, password: password) { authResult, error in
-            if let error = error {
-                errorMessage = error.localizedDescription
-                isError = true
-                return
+            .navigationBarHidden(true)
+            .navigationDestination(isPresented: $shouldNavigateToHome) {
+                HomeView()
             }
-            // User signed up successfully
-            print("User signed up: \(authResult?.user.uid ?? "")")
-            self.presentationMode.wrappedValue.dismiss()
-            
         }
     }
     
-    
-    
-    
-    
-    struct SignupView_Previews: PreviewProvider {
-        static var previews: some View {
-            SignupView()
+    @MainActor
+    private func signUpAnonymously() async {
+        do {
+            let result = try await Auth.auth().signInAnonymously()
+            let user = result.user
+            
+            // Update the user's display name
+            let changeRequest = user.createProfileChangeRequest()
+            changeRequest.displayName = username
+            try await changeRequest.commitChanges()
+            
+            print("User signed up anonymously with username: \(username)")
+            shouldNavigateToHome = true
+        } catch {
+            print("Error signing up: \(error.localizedDescription)")
+            errorMessage = "Error creating account. Please try again."
+            isError = true
         }
     }
 }
+
+struct SignupView_Previews: PreviewProvider {
+    static var previews: some View {
+        SignupView()
+    }
+}
+
+
