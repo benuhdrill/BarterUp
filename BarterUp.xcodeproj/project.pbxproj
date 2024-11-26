@@ -19,6 +19,12 @@
 		B5C51DA92CF6522F0085D0D5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5C51DA82CF6522F0085D0D5 /* FirebaseAuth */; };
 		B5C51DAB2CF6522F0085D0D5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = B5C51DAA2CF6522F0085D0D5 /* FirebaseFirestore */; };
 		B5C51DAD2CF6522F0085D0D5 /* FirebaseFirestoreSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B5C51DAC2CF6522F0085D0D5 /* FirebaseFirestoreSwift */; };
+		B5C51DAF2CF654FE0085D0D5 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C51DAE2CF654FE0085D0D5 /* SearchView.swift */; };
+		B5C51DB12CF657C80085D0D5 /* SkillsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C51DB02CF657C80085D0D5 /* SkillsManager.swift */; };
+		B5C51DB32CF657E90085D0D5 /* NewSkillPostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C51DB22CF657E90085D0D5 /* NewSkillPostView.swift */; };
+		B5C51DB52CF65CAA0085D0D5 /* MessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C51DB42CF65CAA0085D0D5 /* MessageView.swift */; };
+		B5C51DB72CF65CB80085D0D5 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C51DB62CF65CB80085D0D5 /* ChatView.swift */; };
+		B5C51DB92CF65F580085D0D5 /* MessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C51DB82CF65F580085D0D5 /* MessagesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +38,12 @@
 		B54B29BC2CF3D0E80027E9AA /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		B54B29BE2CF3DB700027E9AA /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		B54B29C02CF63FCD0027E9AA /* AuthenticationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationManager.swift; sourceTree = "<group>"; };
+		B5C51DAE2CF654FE0085D0D5 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		B5C51DB02CF657C80085D0D5 /* SkillsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsManager.swift; sourceTree = "<group>"; };
+		B5C51DB22CF657E90085D0D5 /* NewSkillPostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSkillPostView.swift; sourceTree = "<group>"; };
+		B5C51DB42CF65CAA0085D0D5 /* MessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageView.swift; sourceTree = "<group>"; };
+		B5C51DB62CF65CB80085D0D5 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		B5C51DB82CF65F580085D0D5 /* MessagesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,8 +83,14 @@
 				B54B29A12CF3C5C40027E9AA /* BarterUpApp.swift */,
 				B54B29A32CF3C5C40027E9AA /* ContentView.swift */,
 				B54B29BE2CF3DB700027E9AA /* HomeView.swift */,
+				B5C51DB62CF65CB80085D0D5 /* ChatView.swift */,
+				B5C51DB22CF657E90085D0D5 /* NewSkillPostView.swift */,
 				B54B29AF2CF3C76C0027E9AA /* LoginView.swift */,
+				B5C51DB82CF65F580085D0D5 /* MessagesView.swift */,
+				B5C51DB42CF65CAA0085D0D5 /* MessageView.swift */,
 				B54B29C02CF63FCD0027E9AA /* AuthenticationManager.swift */,
+				B5C51DB02CF657C80085D0D5 /* SkillsManager.swift */,
+				B5C51DAE2CF654FE0085D0D5 /* SearchView.swift */,
 				B54B29BC2CF3D0E80027E9AA /* GoogleService-Info.plist */,
 				B54B29A52CF3C5C70027E9AA /* Assets.xcassets */,
 				B54B29A72CF3C5C70027E9AA /* Preview Content */,
@@ -167,9 +185,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B5C51DB32CF657E90085D0D5 /* NewSkillPostView.swift in Sources */,
 				B54B29B22CF3C96D0027E9AA /* SignupView.swift in Sources */,
 				B54B29B02CF3C76C0027E9AA /* LoginView.swift in Sources */,
 				B54B29A42CF3C5C40027E9AA /* ContentView.swift in Sources */,
+				B5C51DB72CF65CB80085D0D5 /* ChatView.swift in Sources */,
+				B5C51DB52CF65CAA0085D0D5 /* MessageView.swift in Sources */,
+				B5C51DB12CF657C80085D0D5 /* SkillsManager.swift in Sources */,
+				B5C51DAF2CF654FE0085D0D5 /* SearchView.swift in Sources */,
+				B5C51DB92CF65F580085D0D5 /* MessagesView.swift in Sources */,
 				B54B29C12CF63FCD0027E9AA /* AuthenticationManager.swift in Sources */,
 				B54B29BF2CF3DB700027E9AA /* HomeView.swift in Sources */,
 				B54B29A22CF3C5C40027E9AA /* BarterUpApp.swift in Sources */,

@@ -12,6 +12,7 @@ import FirebaseFirestoreSwift
 // Add this struct for the skill post model
 struct SkillPost: Identifiable, Codable {
     let id: String
+    let userId: String
     let userName: String
     let timePosted: Date
     let offeringSkill: String
@@ -22,6 +23,7 @@ struct SkillPost: Identifiable, Codable {
     
     // Add initializer for Firestore
     init(id: String = UUID().uuidString,
+         userId: String = Auth.auth().currentUser?.uid ?? "",
          userName: String,
          timePosted: Date,
          offeringSkill: String,
@@ -30,6 +32,7 @@ struct SkillPost: Identifiable, Codable {
          isStarred: Bool = false,
          isLiked: Bool = false) {
         self.id = id
+        self.userId = userId
         self.userName = userName
         self.timePosted = timePosted
         self.offeringSkill = offeringSkill
@@ -46,12 +49,13 @@ struct HomeView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var showNewPostSheet = false
     @State private var selectedTab: Int = 0
-    @State private var skillPosts: [SkillPost] = [] // Add this state
+    @State private var skillPosts: [SkillPost] = []
     
     private let db = Firestore.firestore()
     
     var body: some View {
-        NavigationView {
+        TabView(selection: $selectedTab) {
+            // Home Tab
             VStack(spacing: 0) {
                 // Modified Navigation Bar
                 HStack {
@@ -75,42 +79,54 @@ struct HomeView: View {
                 // Updated Main Content
                 ScrollView {
                     RefreshControl(coordinateSpace: .named("refresh")) {
-                        // Refresh your content here
+                        fetchPosts()
                     }
                     LazyVStack(spacing: 0) {
                         ForEach(skillPosts) { post in
-                            SkillPostView(post: post, onUpdate: { updatedPost in
-                                if let index = skillPosts.firstIndex(where: { $0.id == updatedPost.id }) {
-                                    skillPosts[index] = updatedPost
+                            SkillPostView(
+                                post: post,
+                                selectedTab: $selectedTab,
+                                onUpdate: { updatedPost in
+                                    if let index = skillPosts.firstIndex(where: { $0.id == updatedPost.id }) {
+                                        skillPosts[index] = updatedPost
+                                    }
                                 }
-                            })
+                            )
                             Divider()
                         }
                     }
                 }
                 .coordinateSpace(name: "refresh")
-                
-                // Modified Bottom Navigation Bar (removed notifications)
-                HStack {
-                    TabBarButton(image: "house.fill", text: "Home", isActive: selectedTab == 0)
-                        .onTapGesture { selectedTab = 0 }
-                    TabBarButton(image: "magnifyingglass", text: "Explore", isActive: selectedTab == 1)
-                        .onTapGesture { selectedTab = 1 }
-                    TabBarButton(image: "star.fill", text: "Favorites", isActive: selectedTab == 2)
-                        .onTapGesture { selectedTab = 2 }
-                    TabBarButton(image: "envelope.fill", text: "Messages", isActive: selectedTab == 3)
-                        .onTapGesture { selectedTab = 3 }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(Color(UIColor.systemBackground))
-                .overlay(
-                    Divider()
-                        .padding(.horizontal, -16)
-                        .opacity(0.3)
-                    , alignment: .top
-                )
             }
+            .tabItem {
+                Image(systemName: "house.fill")
+                Text("Home")
+            }
+            .tag(0)
+            
+            // Search Tab
+            SearchView(selectedTab: $selectedTab)
+                .tabItem {
+                    Image(systemName: "magnifyingglass")
+                    Text("Search")
+                }
+                .tag(1)
+            
+            // Favorites Tab
+            Text("Favorites")
+                .tabItem {
+                    Image(systemName: "star.fill")
+                    Text("Favorites")
+                }
+                .tag(2)
+            
+            // Messages Tab
+            MessagesView(selectedTab: $selectedTab)
+                .tabItem {
+                    Image(systemName: "envelope.fill")
+                    Text("Messages")
+                }
+                .tag(3)
         }
         .sheet(isPresented: $showNewPostSheet) {
             NewSkillPostView(onPost: { offering, seeking, details in
@@ -118,7 +134,7 @@ struct HomeView: View {
             })
         }
         .onAppear {
-            fetchPosts()  // This will load posts when the view appears
+            fetchPosts()
         }
     }
     
@@ -153,7 +169,12 @@ struct HomeView: View {
     
     // Update addNewPost function
     private func addNewPost(offering: String, seeking: String, details: String) {
-        guard let currentUser = Auth.auth().currentUser else { return }
+        guard let currentUser = Auth.auth().currentUser else { 
+            print("No current user")
+            return 
+        }
+        
+        print("Creating post with offering: \(offering), seeking: \(seeking)") // Debug print
         
         let newPost = SkillPost(
             userName: currentUser.displayName ?? "Anonymous",
@@ -164,8 +185,8 @@ struct HomeView: View {
         )
         
         do {
-            // Save to Firestore
             try db.collection("posts").document(newPost.id).setData(from: newPost)
+            print("Post saved successfully") // Debug print
         } catch {
             print("Error adding post: \(error.localizedDescription)")
         }
@@ -201,19 +222,14 @@ struct TabBarButton: View {
 // Update SkillPostView to use the SkillPost model
 struct SkillPostView: View {
     let post: SkillPost
+    @Binding var selectedTab: Int
     let onUpdate: (SkillPost) -> Void
-    @State private var isPressed: Bool
-    @State private var isStarred: Bool
-    
-    init(post: SkillPost, onUpdate: @escaping (SkillPost) -> Void) {
-        self.post = post
-        self.onUpdate = onUpdate
-        _isPressed = State(initialValue: post.isLiked)
-        _isStarred = State(initialValue: post.isStarred)
-    }
+    @State private var isPressed = false
+    @State private var isStarred = false
+    @State private var showChatView = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             // Modified User Info section
             HStack {
                 Image(systemName: "person.circle.fill")
@@ -254,8 +270,11 @@ struct SkillPostView: View {
             
             // Interaction Buttons
             HStack(spacing: 32) {
-                Button(action: {}) {
-                    Label("128", systemImage: "message")
+                Button(action: {
+                    sendInitialMessage()
+                    selectedTab = 3  // Switch to Messages tab
+                }) {
+                    Label("Message", systemImage: "message")
                         .foregroundColor(.gray)
                 }
                 Button(action: {}) {
@@ -281,69 +300,26 @@ struct SkillPostView: View {
         }
         .padding()
     }
-}
-
-// New Skill Post View
-struct NewSkillPostView: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var postText = ""
-    @State private var offeringSkill = ""
-    @State private var seekingSkill = ""
-    let onPost: (String, String, String) -> Void
     
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                // Updated TextField styles
-                TextField("What skills are you offering?", text: $offeringSkill)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                
-                TextField("What skills are you seeking?", text: $seekingSkill)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                
-                TextEditor(text: $postText)
-                    .frame(height: 100)
-                    .padding(4)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                    .overlay(
-                        Group {
-                            if postText.isEmpty {
-                                Text("Add more details about your exchange...")
-                                    .foregroundColor(Color(.placeholderText))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 12)
-                            }
-                        }
-                        , alignment: .topLeading
-                    )
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("New Skill Exchange")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Post") {
-                        onPost(offeringSkill, seekingSkill, postText)
-                        dismiss()
-                    }
-                    .fontWeight(.bold)
-                }
-            }
+    private func sendInitialMessage() {
+        guard let currentUser = Auth.auth().currentUser else { return }
+        
+        let message = Message(
+            senderId: currentUser.uid,
+            receiverId: post.userId,
+            content: "Hi! I'm interested in exchanging skills!",
+            timestamp: Date(),
+            senderName: currentUser.displayName ?? "Anonymous"
+        )
+        
+        do {
+            try Firestore.firestore().collection("messages").addDocument(from: message)
+        } catch {
+            print("Error sending initial message: \(error)")
         }
     }
 }
+
 
 struct HomeView_Previews: PreviewProvider {
     static var previews: some View {

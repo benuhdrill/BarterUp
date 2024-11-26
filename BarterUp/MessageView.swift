@@ -5,14 +5,24 @@
 //  Created by Ben Gmach on 11/26/24.
 //
 
-import SwiftUI
+import FirebaseFirestoreSwift
+import FirebaseAuth
 
-struct MessageView: View {
-    var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+struct Message: Identifiable, Codable, Equatable {
+    @DocumentID var id: String?
+    let senderId: String
+    let receiverId: String
+    let content: String
+    let timestamp: Date
+    let senderName: String
+    
+    var isFromCurrentUser: Bool {
+        return senderId == Auth.auth().currentUser?.uid
     }
-}
-
-#Preview {
-    MessageView()
+    
+    static func == (lhs: Message, rhs: Message) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.content == rhs.content &&
+               lhs.timestamp == rhs.timestamp
+    }
 }
