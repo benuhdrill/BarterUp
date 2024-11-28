@@ -6,86 +6,137 @@ struct SignUpView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var username = ""
+    @State private var skillsOffered: [String] = []
+    @State private var skillsWanted: [String] = []
+    @State private var newSkillOffered = ""
+    @State private var newSkillWanted = ""
+    @State private var showingError = false
     @State private var errorMessage = ""
-    
-    private let db = Firestore.firestore()
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        VStack(spacing: 20) {
-            TextField("Email", text: $email)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .autocapitalization(.none)
-                .keyboardType(.emailAddress)
-            
-            TextField("Username", text: $username)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .autocapitalization(.none)
-            
-            SecureField("Password", text: $password)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-            
-            if !errorMessage.isEmpty {
+        NavigationView {
+            Form {
+                Section(header: Text("Account Information")) {
+                    TextField("Email", text: $email)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    SecureField("Password", text: $password)
+                    TextField("Username", text: $username)
+                }
+                
+                Section(header: Text("Skills You Can Offer")) {
+                    ForEach(skillsOffered, id: \.self) { skill in
+                        HStack {
+                            Text(skill)
+                            Spacer()
+                            Button(action: { removeSkillOffered(skill) }) {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                    
+                    HStack {
+                        TextField("Add a skill", text: $newSkillOffered)
+                        Button(action: addSkillOffered) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.blue)
+                        }
+                        .disabled(newSkillOffered.isEmpty)
+                    }
+                }
+                
+                Section(header: Text("Skills You Want to Learn")) {
+                    ForEach(skillsWanted, id: \.self) { skill in
+                        HStack {
+                            Text(skill)
+                            Spacer()
+                            Button(action: { removeSkillWanted(skill) }) {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                    
+                    HStack {
+                        TextField("Add a skill", text: $newSkillWanted)
+                        Button(action: addSkillWanted) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.blue)
+                        }
+                        .disabled(newSkillWanted.isEmpty)
+                    }
+                }
+                
+                Button(action: signUp) {
+                    Text("Create Account")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .disabled(email.isEmpty || password.isEmpty || username.isEmpty || 
+                         skillsOffered.isEmpty || skillsWanted.isEmpty)
+                .buttonStyle(.borderedProminent)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+            .navigationTitle("Sign Up")
+            .alert("Error", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
                 Text(errorMessage)
-                    .foregroundColor(.red)
             }
-            
-            Button("Sign Up") {
-                signUp()
-            }
-            .disabled(email.isEmpty || password.isEmpty || username.isEmpty)
         }
-        .padding()
+    }
+    
+    private func addSkillOffered() {
+        let skill = newSkillOffered.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !skill.isEmpty else { return }
+        skillsOffered.append(skill)
+        newSkillOffered = ""
+    }
+    
+    private func removeSkillOffered(_ skill: String) {
+        skillsOffered.removeAll { $0 == skill }
+    }
+    
+    private func addSkillWanted() {
+        let skill = newSkillWanted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !skill.isEmpty else { return }
+        skillsWanted.append(skill)
+        newSkillWanted = ""
+    }
+    
+    private func removeSkillWanted(_ skill: String) {
+        skillsWanted.removeAll { $0 == skill }
     }
     
     private func signUp() {
-        // First create the auth user
         Auth.auth().createUser(withEmail: email, password: password) { result, error in
             if let error = error {
                 errorMessage = error.localizedDescription
+                showingError = true
                 return
             }
             
-            guard let user = result?.user else { return }
+            guard let userId = result?.user.uid else { return }
             
-            // Now check if username is available
-            db.collection("users")
-                .whereField("username", isEqualTo: username)
-                .getDocuments { snapshot, error in
-                    if let error = error {
-                        errorMessage = "Error checking username: \(error.localizedDescription)"
-                        return
-                    }
-                    
-                    if let documents = snapshot?.documents, !documents.isEmpty {
-                        // If username is taken, delete the auth user we just created
-                        user.delete { error in
-                            if let error = error {
-                                print("Error deleting user: \(error.localizedDescription)")
-                            }
-                        }
-                        errorMessage = "Username already taken"
-                        return
-                    }
-                    
-                    // Username is available, create user document
-                    let userData: [String: Any] = [
-                        "email": email,
-                        "username": username,
-                        "createdAt": FieldValue.serverTimestamp(),
-                        "skillsOffered": [],
-                        "skillsWanted": []
-                    ]
-                    
-                    db.collection("users").document(user.uid).setData(userData) { error in
-                        if let error = error {
-                            errorMessage = "Error saving user data: \(error.localizedDescription)"
-                        } else {
-                            // Successfully created user and saved data
-                            print("✅ User created successfully")
-                            // You might want to dismiss the view or navigate somewhere here
-                        }
-                    }
+            let userData: [String: Any] = [
+                "username": username,
+                "email": email,
+                "skillsOffered": skillsOffered,
+                "skillsWanted": skillsWanted
+            ]
+            
+            Firestore.firestore().collection("users").document(userId).setData(userData) { error in
+                if let error = error {
+                    errorMessage = error.localizedDescription
+                    showingError = true
+                    return
                 }
+                
+                dismiss()
+            }
         }
     }
 }

@@ -8,45 +8,72 @@
 import SwiftUI
 
 struct FlowLayout: Layout {
-    var spacing: CGFloat
+    var spacing: CGFloat = 8
     
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        return arrangeSubviews(sizes: sizes, proposal: proposal).size
+        let rows = computeRows(proposal: proposal, subviews: subviews)
+        return rows.size
     }
     
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let offsets = arrangeSubviews(sizes: sizes, proposal: proposal).offsets
+        let rows = computeRows(proposal: proposal, subviews: subviews)
+        rows.place(in: bounds)
+    }
+    
+    private func computeRows(proposal: ProposedViewSize, subviews: Subviews) -> Rows {
+        var rows: [Row] = []
+        var currentRow = Row(spacing: spacing)
+        let maxWidth = proposal.width ?? 0
         
-        for (offset, subview) in zip(offsets, subviews) {
-            subview.place(at: CGPoint(x: bounds.minX + offset.x, y: bounds.minY + offset.y), proposal: .unspecified)
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentRow.width + size.width + spacing > maxWidth && !currentRow.isEmpty {
+                rows.append(currentRow)
+                currentRow = Row(spacing: spacing)
+            }
+            currentRow.add(subview, size: size)
+        }
+        if !currentRow.isEmpty {
+            rows.append(currentRow)
+        }
+        
+        return Rows(rows: rows)
+    }
+    
+    struct Row {
+        var subviews: [(subview: LayoutSubview, size: CGSize)] = []
+        var width: CGFloat = 0
+        let spacing: CGFloat
+        
+        var isEmpty: Bool { subviews.isEmpty }
+        
+        mutating func add(_ subview: LayoutSubview, size: CGSize) {
+            subviews.append((subview, size))
+            width += size.width + (isEmpty ? 0 : spacing)
         }
     }
     
-    private func arrangeSubviews(sizes: [CGSize], proposal: ProposedViewSize) -> (offsets: [CGPoint], size: CGSize) {
-        let width = proposal.width ?? .infinity
-        var offsets: [CGPoint] = []
-        var currentPosition = CGPoint.zero
-        var maxY: CGFloat = 0
-        var maxWidth: CGFloat = 0
-        
-        for size in sizes {
-            if currentPosition.x + size.width > width {
-                // Move to next row
-                currentPosition.x = 0
-                currentPosition.y = maxY + spacing
-            }
-            
-            offsets.append(currentPosition)
-            
-            // Update position and track maximum width/height
-            currentPosition.x += size.width + spacing
-            maxWidth = max(maxWidth, currentPosition.x)
-            maxY = max(maxY, currentPosition.y + size.height)
+    struct Rows {
+        var rows: [Row]
+        var size: CGSize {
+            let width = rows.map(\.width).max() ?? 0
+            let height = rows.map { row in
+                row.subviews.map(\.size.height).max() ?? 0
+            }.reduce(0, +)
+            return CGSize(width: width, height: height)
         }
         
-        return (offsets, CGSize(width: maxWidth, height: maxY))
+        func place(in bounds: CGRect) {
+            var y = bounds.minY
+            for row in rows {
+                var x = bounds.minX
+                for (subview, size) in row.subviews {
+                    subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                    x += size.width + row.spacing
+                }
+                y += (row.subviews.map(\.size.height).max() ?? 0)
+            }
+        }
     }
 }
 

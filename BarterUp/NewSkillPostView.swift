@@ -7,6 +7,7 @@
 import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseFirestoreSwift
 
 struct NewSkillPostView: View {
     @Environment(\.dismiss) var dismiss

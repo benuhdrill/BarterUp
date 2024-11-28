@@ -9,7 +9,7 @@ import Foundation
 import FirebaseFirestore
 import FirebaseFirestoreSwift
 
-struct Conversation: Identifiable {
+struct Conversation: Identifiable, Codable {
     let id: String
     let otherUserId: String
     let otherUserName: String
@@ -27,7 +27,7 @@ struct Conversation: Identifiable {
     }
 }
 
-struct Message: Identifiable, Codable , Equatable {
+struct Message: Identifiable, Codable, Equatable {
     let id: String
     let senderId: String
     let text: String
@@ -42,9 +42,4 @@ struct Message: Identifiable, Codable , Equatable {
         self.text = text
         self.timestamp = timestamp
     }
-}
-
-struct SkillTag: Identifiable {
-    let id = UUID()
-    let name: String
 }

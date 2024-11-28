@@ -8,84 +8,32 @@
 import SwiftUI
 
 struct AddSkillView: View {
-    @Environment(\.dismiss) var dismiss
-    @State private var selectedCategory = ""
-    @State private var customSkill = ""
-    @State private var isCustomSkill = false
-    let skillType: SkillType
-    let onAdd: (String) -> Void
-    
-    private let skillsManager = SkillsManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var newSkill = ""
     
     enum SkillType {
         case offering, seeking
-        
-        var title: String {
-            switch self {
-            case .offering: return "Add Skill to Offer"
-            case .seeking: return "Add Skill to Learn"
-            }
-        }
     }
+    
+    let skillType: SkillType
+    let onAdd: (String) -> Void
     
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Category")) {
-                    Picker("Select Category", selection: $selectedCategory) {
-                        Text("Select Category").tag("")
-                        ForEach(skillsManager.getAllCategories(), id: \.self) { category in
-                            Text(category).tag(category)
-                        }
-                    }
-                }
-                
-                if !selectedCategory.isEmpty {
-                    Section {
-                        Toggle("Custom Skill", isOn: $isCustomSkill)
-                        
-                        if isCustomSkill {
-                            TextField("Enter skill name", text: $customSkill)
-                                .autocapitalization(.words)
-                        } else {
-                            Picker("Select Skill", selection: $customSkill) {
-                                Text("Select Skill").tag("")
-                                ForEach(skillsManager.getSkills(for: selectedCategory), id: \.self) { skill in
-                                    Text(skill).tag(skill)
-                                }
-                            }
-                        }
-                    }
-                }
+                TextField("Enter skill", text: $newSkill)
             }
-            .navigationTitle(skillType.title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
+            .navigationTitle(skillType == .offering ? "Add Skill to Offer" : "Add Skill to Learn")
+            .navigationBarItems(
+                leading: Button("Cancel") { dismiss() },
+                trailing: Button("Add") {
+                    if !newSkill.isEmpty {
+                        onAdd(newSkill)
                         dismiss()
                     }
                 }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Add") {
-                        let skillToAdd = "\(selectedCategory): \(customSkill)"
-                        onAdd(skillToAdd)
-                        dismiss()
-                    }
-                    .disabled(!isValid)
-                }
-            }
+                .disabled(newSkill.isEmpty)
+            )
         }
-    }
-    
-    private var isValid: Bool {
-        !selectedCategory.isEmpty && !customSkill.isEmpty
-    }
-}
-
-struct AddSkillView_Previews: PreviewProvider {
-    static var previews: some View {
-        AddSkillView(skillType: .offering) { _ in }
     }
 }

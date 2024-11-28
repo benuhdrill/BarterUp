@@ -105,43 +105,51 @@ struct HomeView: View {
         TabView(selection: $selectedTab) {
             // Home Tab
             VStack(spacing: 0) {
+                // Clean Navigation Bar
                 HStack {
-                    Button(action: signOut) {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .foregroundColor(.red)
-                    }
                     Spacer()
                     Text("BarterUp")
-                        .font(.title)
+                        .font(.title2)
                         .fontWeight(.bold)
                     Spacer()
                     Button(action: { showNewPostSheet = true }) {
-                        Image(systemName: "plus")
+                        Image(systemName: "plus.circle.fill")
                             .foregroundColor(.blue)
+                            .imageScale(.large)
                     }
                 }
-                .padding()
+                .padding(.horizontal, 20)
+                .padding(.vertical, 15)
                 .background(Color(UIColor.systemBackground))
                 
-                ScrollView {
+                // Content
+                ScrollView(showsIndicators: false) {
                     RefreshControl(coordinateSpace: .named("refresh")) {
                         fetchPosts()
                     }
+                    
                     LazyVStack(spacing: 0) {
                         ForEach(skillPosts) { post in
-                            SkillPostView(
-                                post: post,
-                                selectedTab: $selectedTab,
-                                onUpdate: { updatedPost in
-                                    if let index = skillPosts.firstIndex(where: { $0.id == updatedPost.id }) {
-                                        skillPosts[index] = updatedPost
+                            VStack(spacing: 0) {
+                                SkillPostView(
+                                    post: post,
+                                    selectedTab: $selectedTab,
+                                    onUpdate: { updatedPost in
+                                        if let index = skillPosts.firstIndex(where: { $0.id == updatedPost.id }) {
+                                            skillPosts[index] = updatedPost
+                                        }
                                     }
-                                }
-                            )
-                            Divider()
+                                )
+                                .padding(.vertical, 16)
+                                .padding(.horizontal, 20)
+                                
+                                Divider()
+                            }
+                            .background(Color(UIColor.systemBackground))
                         }
                     }
                 }
+                .background(Color(.systemGroupedBackground))
                 .coordinateSpace(name: "refresh")
             }
             .tabItem {
@@ -191,14 +199,6 @@ struct HomeView: View {
         .onAppear {
             fetchPosts()
             fetchUnreadCount()
-        }
-    }
-    
-    private func signOut() {
-        do {
-            try Auth.auth().signOut()
-        } catch {
-            print("Error signing out: \(error.localizedDescription)")
         }
     }
     

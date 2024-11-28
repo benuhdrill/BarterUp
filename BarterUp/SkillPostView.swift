@@ -13,168 +13,223 @@ struct SkillPostView: View {
     let post: SkillPost
     @Binding var selectedTab: Int
     let onUpdate: (SkillPost) -> Void
-    @State private var isPressed = false
-    @State private var isStarred = false
-    @State private var showChatView = false
+    @State private var showingChatSheet = false
+    @State private var conversation: Conversation?
+    @State private var isLoading = false
     private let db = Firestore.firestore()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // User and Time
             HStack {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .frame(width: 40, height: 40)
-                    .foregroundColor(.gray)
                 Text(post.userName)
-                    .fontWeight(.bold)
+                    .font(.headline)
                 Spacer()
+                Text(post.timePosted.timeAgo())
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            // Skills Exchange with Labels
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Skills Offering")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    SkillTag(text: post.offeringSkill, type: .offering)
+                }
+                
+                Image(systemName: "arrow.right")
+                    .foregroundColor(.gray)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Skills Wanted")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    SkillTag(text: post.seekingSkill, type: .seeking)
+                }
+            }
+            
+            // Details
+            if !post.details.isEmpty {
+                Text(post.details)
+                    .font(.body)
+                    .lineLimit(3)
+            }
+            
+            Spacer(minLength: 8)
+            
+            // Action buttons at bottom
+            HStack(spacing: 24) {
+                // Like button
+                Button(action: toggleLike) {
+                    HStack(spacing: 4) {
+                        Image(systemName: post.isLiked ? "heart.fill" : "heart")
+                        Text("\(post.likesCount)")
+                    }
+                    .foregroundColor(post.isLiked ? .red : .gray)
+                }
+                
+                // Message button
                 Button(action: {
-                    var updatedPost = post
-                    updatedPost.isStarred.toggle()
-                    onUpdate(updatedPost)
-                    
-                    // Call toggleFavorite here
-                    guard let userId = Auth.auth().currentUser?.uid else { return }
-                    let favoriteRef = db.collection("users")
-                        .document(userId)
-                        .collection("favorites")
-                        .document(post.id)
-                    
-                    if updatedPost.isStarred {
-                        // Add to favorites
-                        do {
-                            try favoriteRef.setData(from: updatedPost)
-                        } catch {
-                            print("❌ Error adding favorite: \(error)")
-                        }
-                    } else {
-                        // Remove from favorites
-                        favoriteRef.delete { error in
-                            if let error = error {
-                                print("❌ Error removing favorite: \(error)")
-                            }
+                    isLoading = true
+                    startConversation()
+                }) {
+                    HStack {
+                        Image(systemName: "message")
+                            .foregroundColor(isLoading ? .gray : .blue)
+                        
+                        if isLoading {
+                            ProgressView()
+                                .scaleEffect(0.8)
                         }
                     }
+                }
+                .disabled(isLoading)
+                
+                Spacer()
+                
+                // Favorite button
+                Button(action: {
+                    toggleFavorite()
                 }) {
                     Image(systemName: post.isStarred ? "star.fill" : "star")
                         .foregroundColor(post.isStarred ? .yellow : .gray)
-                        .scaleEffect(post.isStarred ? 1.2 : 1.0)
-                }
-                Text(post.timePosted.timeAgo())
-                    .foregroundColor(.gray)
-                    .font(.subheadline)
-                    .padding(.leading, 8)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Looking to exchange:")
-                    .fontWeight(.semibold)
-                Text("Offering: \(post.offeringSkill)")
-                    .foregroundColor(.blue)
-                Text("Seeking: \(post.seekingSkill)")
-                    .foregroundColor(.green)
-                Text(post.details)
-            }
-            
-            HStack(spacing: 32) {
-                Button(action: {
-                    startChat(with: post)
-                    selectedTab = 3  // Switch to Messages tab
-                }) {
-                    Label("Message", systemImage: "message")
-                        .foregroundColor(.gray)
-                }
-                Button(action: {
-                    withAnimation(.spring()) {
-                        var updatedPost = post
-                        updatedPost.isLiked.toggle()
-                        updatedPost.likesCount += updatedPost.isLiked ? 1 : -1
-                        onUpdate(updatedPost)
-                        updatePostInFirestore(updatedPost)
-                    }
-                }) {
-                    Label("\(post.likesCount)", systemImage: "heart")
-                        .foregroundColor(post.isLiked ? .red : .gray)
-                        .scaleEffect(post.isLiked ? 1.2 : 1.0)
-                }
-                Button(action: {}) {
-                    Label("", systemImage: "square.and.arrow.up")
-                        .foregroundColor(.gray)
                 }
             }
-            .font(.subheadline)
-            .padding(.top, 8)
+            .font(.system(size: 16))
         }
-        .padding()
+        .sheet(isPresented: $showingChatSheet) {
+            if let conversation = conversation {
+                NavigationView {
+                    ChatView(conversation: conversation)
+                }
+                .navigationViewStyle(StackNavigationViewStyle())
+            }
+        }
     }
     
-    private func startChat(with post: SkillPost) {
-        guard let currentUser = Auth.auth().currentUser else { return }
+    private func toggleFavorite() {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
         
-        db.collection("users").document(currentUser.uid).getDocument { snapshot, error in
-            if let error = error {
-                print("❌ Error fetching user data: \(error)")
-                return
-            }
-            
-            guard let document = snapshot,
-                  let userData = document.data(),
-                  let username = userData["username"] as? String else {
-                print("❌ Could not get username")
-                return
-            }
-            
-            let userIds = [currentUser.uid, post.userId].sorted()
-            let conversationId = userIds.joined(separator: "_")
-            
-            let currentUserConversation = [
-                "otherUserId": post.userId,
-                "otherUserName": post.userName,
-                "lastMessage": "",
-                "timestamp": Timestamp(date: Date()),
-                "unreadCount": 0
-            ] as [String : Any]
-            
-            let otherUserConversation = [
-                "otherUserId": currentUser.uid,
-                "otherUserName": username,
-                "lastMessage": "",
-                "timestamp": Timestamp(date: Date()),
-                "unreadCount": 0
-            ] as [String : Any]
-            
-            let batch = self.db.batch()
-            
-            batch.setData(currentUserConversation,
-                         forDocument: self.db.collection("users")
-                            .document(currentUser.uid)
-                            .collection("conversations")
-                            .document(conversationId))
-            
-            batch.setData(otherUserConversation,
-                         forDocument: self.db.collection("users")
-                            .document(post.userId)
-                            .collection("conversations")
-                            .document(conversationId))
-            
-            batch.commit { error in
-                if let error = error {
-                    print("❌ Error creating conversation: \(error)")
-                } else {
-                    print("✅ Conversation created successfully")
-                    DispatchQueue.main.async {
-                        self.selectedTab = 3  // Switch to Messages tab
-                    }
-                }
-            }
+        var updatedPost = post
+        updatedPost.isStarred.toggle()
+        
+        // Update Firestore
+        let favoriteRef = db.collection("users")
+            .document(currentUserId)
+            .collection("favorites")
+            .document(post.id)
+        
+        if updatedPost.isStarred {
+            // Add to favorites
+            try? favoriteRef.setData(from: updatedPost)
+        } else {
+            // Remove from favorites
+            favoriteRef.delete()
         }
+        
+        // Update local state
+        onUpdate(updatedPost)
     }
     
-    private func updatePostInFirestore(_ post: SkillPost) {
-        do {
-            try db.collection("posts").document(post.id).setData(from: post)
-        } catch {
-            print("❌ Error updating post: \(error)")
+    private func startConversation() {
+        guard let currentUserId = Auth.auth().currentUser?.uid else {
+            isLoading = false
+            return
+        }
+        
+        let conversationId = [currentUserId, post.userId].sorted().joined(separator: "_")
+        
+        // First check if conversation already exists
+        db.collection("users")
+            .document(currentUserId)
+            .collection("conversations")
+            .document(conversationId)
+            .getDocument { document, error in
+                if let document = document, document.exists,
+                   let data = document.data() {
+                    // Conversation exists, use it
+                    self.conversation = Conversation(id: conversationId, data: data)
+                    self.isLoading = false
+                    self.showingChatSheet = true
+                    return
+                }
+                
+                // Create new conversation if it doesn't exist
+                let conversationData: [String: Any] = [
+                    "lastMessage": "",
+                    "timestamp": Date(),
+                    "otherUserId": post.userId,
+                    "otherUserName": post.userName,
+                    "unreadCount": 0
+                ]
+                
+                db.collection("conversations").document(conversationId).setData([
+                    "participants": [currentUserId, post.userId],
+                    "lastUpdated": Date()
+                ], merge: true) { error in
+                    if let error = error {
+                        print("Error creating conversation: \(error)")
+                        isLoading = false
+                        return
+                    }
+                    
+                    db.collection("users")
+                        .document(currentUserId)
+                        .collection("conversations")
+                        .document(conversationId)
+                        .setData(conversationData, merge: true) { error in
+                            DispatchQueue.main.async {
+                                if error == nil {
+                                    self.conversation = Conversation(id: conversationId, data: conversationData)
+                                    self.showingChatSheet = true
+                                }
+                                self.isLoading = false
+                            }
+                        }
+                }
+            }
+    }
+    
+    private func toggleLike() {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        
+        var updatedPost = post
+        updatedPost.isLiked.toggle()
+        updatedPost.likesCount += updatedPost.isLiked ? 1 : -1
+        
+        // Update Firestore
+        let postRef = db.collection("posts").document(post.id)
+        
+        let batch = db.batch()
+        
+        // Update post likes count
+        batch.updateData([
+            "likesCount": FieldValue.increment(updatedPost.isLiked ? Int64(1) : Int64(-1)),
+            "isLiked": updatedPost.isLiked
+        ], forDocument: postRef)
+        
+        // Update user's liked posts
+        let likeRef = db.collection("users")
+            .document(currentUserId)
+            .collection("likedPosts")
+            .document(post.id)
+        
+        if updatedPost.isLiked {
+            batch.setData(["timestamp": FieldValue.serverTimestamp()], forDocument: likeRef)
+        } else {
+            batch.deleteDocument(likeRef)
+        }
+        
+        batch.commit { error in
+            if let error = error {
+                print("Error updating like: \(error)")
+                return
+            }
+            
+            // Update local state
+            onUpdate(updatedPost)
         }
     }
 }

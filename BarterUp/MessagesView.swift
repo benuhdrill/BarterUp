@@ -18,25 +18,7 @@ struct MessagesView: View {
         NavigationView {
             List(conversations) { conversation in
                 NavigationLink(destination: ChatView(conversation: conversation)) {
-                    VStack(alignment: .leading) {
-                        HStack {
-                            Text(conversation.otherUserName)
-                                .font(.headline)
-                            Spacer()
-                            if !conversation.lastMessage.isEmpty {
-                                Text(conversation.timestamp.timeAgo())
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                        }
-                        if !conversation.lastMessage.isEmpty {
-                            Text(conversation.lastMessage)
-                                .font(.subheadline)
-                                .foregroundColor(.gray)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.vertical, 4)
+                    ConversationRow(conversation: conversation)
                 }
             }
             .navigationTitle("Messages")
@@ -59,10 +41,50 @@ struct MessagesView: View {
                     return
                 }
                 
-                conversations = querySnapshot?.documents.map { document in
-                    Conversation(id: document.documentID, data: document.data())
+                conversations = querySnapshot?.documents.compactMap { document -> Conversation? in
+                    let conversation = Conversation(id: document.documentID, data: document.data())
+                    if conversation.otherUserId == userId {
+                        return nil
+                    }
+                    return conversation
                 } ?? []
             }
+    }
+}
+
+struct ConversationRow: View {
+    let conversation: Conversation
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(conversation.otherUserName)
+                    .font(.headline)
+                Spacer()
+                Text(conversation.timestamp.timeAgo())
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            if !conversation.lastMessage.isEmpty {
+                Text(conversation.lastMessage)
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            
+            if conversation.unreadCount > 0 {
+                Text("\(conversation.unreadCount) new")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 2)
+                    .background(Color.blue)
+                    .cornerRadius(8)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -134,7 +156,7 @@ struct ChatView: View {
             } ?? []
         }
     }
-    
+  
     private func sendMessage() {
         guard let currentUserId = Auth.auth().currentUser?.uid,
               !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
