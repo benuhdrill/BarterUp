@@ -7,110 +7,78 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
-import FirebaseFirestoreSwift
 
 struct SearchView: View {
-    @State private var searchText = ""
-    @State private var searchResults: [SkillPost] = []
-    @State private var selectedCategory = "All"
-    @State private var isGridView = false
     @Binding var selectedTab: Int
+    @State private var searchText = ""
+    @State private var selectedFilter: SearchFilter = .all
+    @State private var searchResults: [SkillPost] = []
     private let db = Firestore.firestore()
-    private let skillsManager = SkillsManager.shared
     
-    // Get categories from SkillsManager
-    private var categories: [String] {
-        ["All"] + skillsManager.getAllCategories()
+    enum SearchFilter {
+        case all, offering, seeking
     }
     
     var filteredResults: [SkillPost] {
-        if selectedCategory == "All" {
+        if searchText.isEmpty {
             return searchResults
         }
+        
         return searchResults.filter { post in
-            post.offeringSkill.contains(selectedCategory) ||
-            post.seekingSkill.contains(selectedCategory)
+            switch selectedFilter {
+            case .all:
+                return post.offeringSkill.localizedCaseInsensitiveContains(searchText) ||
+                       post.seekingSkill.localizedCaseInsensitiveContains(searchText)
+            case .offering:
+                return post.offeringSkill.localizedCaseInsensitiveContains(searchText)
+            case .seeking:
+                return post.seekingSkill.localizedCaseInsensitiveContains(searchText)
+            }
         }
-    }
-    
-    // Grid layout configuration
-    private let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
-    init(selectedTab: Binding<Int>) {
-        _selectedTab = selectedTab
     }
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Category Picker
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(categories, id: \.self) { category in
-                            CategoryButton(
-                                title: category,
-                                isSelected: selectedCategory == category,
-                                action: { selectedCategory = category }
-                            )
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.vertical, 8)
-                
-                // Search Bar and View Toggle
+            VStack {
+                // Search Bar
                 HStack {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.gray)
-                        TextField("Search for skills...", text: $searchText)
-                            .autocapitalization(.none)
-                            .onChange(of: searchText) { newValue in
-                                searchSkills(query: newValue)
-                            }
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search skills...", text: $searchText)
+                }
+                .padding(8)
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                
+                // Filter Buttons
+                HStack {
+                    FilterButton(title: "All", isSelected: selectedFilter == .all) {
+                        selectedFilter = .all
                     }
-                    .padding(8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
-                    
-                    // View Toggle Button
-                    Button(action: { isGridView.toggle() }) {
-                        Image(systemName: isGridView ? "list.bullet" : "square.grid.2x2")
-                            .foregroundColor(.blue)
-                            .padding(8)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(10)
+                    FilterButton(title: "Offering", isSelected: selectedFilter == .offering) {
+                        selectedFilter = .offering
+                    }
+                    FilterButton(title: "Seeking", isSelected: selectedFilter == .seeking) {
+                        selectedFilter = .seeking
                     }
                 }
                 .padding(.horizontal)
                 
-                // Results Count
-                if !searchText.isEmpty {
-                    HStack {
-                        Text("\(filteredResults.count) results found")
+                // Results List
+                if filteredResults.isEmpty {
+                    VStack(spacing: 20) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 50))
                             .foregroundColor(.gray)
-                            .font(.subheadline)
-                        Spacer()
+                        Text("No results found")
+                            .font(.title2)
+                        Text("Try adjusting your search")
+                            .foregroundColor(.gray)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                }
-                
-                // Search Results
-                ScrollView {
-                    if isGridView {
-                        // Grid View
-                        LazyVGrid(columns: columns, spacing: 16) {
-                            ForEach(filteredResults) { post in
-                                GridSkillPostView(post: post)
-                            }
-                        }
-                        .padding()
-                    } else {
-                        // List View
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(filteredResults) { post in
                                 SkillPostView(
@@ -127,61 +95,31 @@ struct SearchView: View {
                         }
                     }
                 }
-                
-                if filteredResults.isEmpty && !searchText.isEmpty {
-                    EmptySearchView(searchText: searchText)
-                }
             }
-            .navigationTitle("Search Skills")
+            .navigationTitle("Search")
+            .onAppear {
+                fetchAllPosts()
+            }
         }
     }
     
-    private func searchSkills(query: String) {
-        guard !query.isEmpty else {
-            searchResults.removeAll()
-            return
-        }
-        
-        print("Searching for: \(query)") // Debug print
-        
+    private func fetchAllPosts() {
         db.collection("posts")
-            .getDocuments { snapshot, error in
+            .order(by: "timePosted", descending: true)
+            .addSnapshotListener { querySnapshot, error in
                 if let error = error {
-                    print("Error searching skills: \(error.localizedDescription)")
+                    print("Error fetching posts: \(error)")
                     return
                 }
                 
-                guard let documents = snapshot?.documents else {
-                    print("No documents found") // Debug print
-                    searchResults.removeAll()
-                    return
-                }
-                
-                print("Found \(documents.count) documents") // Debug print
-                
-                searchResults = documents.compactMap { document -> SkillPost? in
-                    do {
-                        let post = try document.data(as: SkillPost.self)
-                        print("Document data: \(document.data())") // Debug print
-                        return post
-                    } catch {
-                        print("Error decoding document: \(error)") // Debug print
-                        return nil
-                    }
-                }.filter { post in
-                    let offeringMatch = post.offeringSkill.lowercased().contains(query.lowercased())
-                    let seekingMatch = post.seekingSkill.lowercased().contains(query.lowercased())
-                    print("Post offering: \(post.offeringSkill), seeking: \(post.seekingSkill), matches: \(offeringMatch || seekingMatch)") // Debug print
-                    return offeringMatch || seekingMatch
-                }
-                
-                print("Final results count: \(searchResults.count)") // Debug print
+                searchResults = querySnapshot?.documents.compactMap { document -> SkillPost? in
+                    try? document.data(as: SkillPost.self)
+                } ?? []
             }
     }
 }
 
-// Add this CategoryButton view
-struct CategoryButton: View {
+struct FilterButton: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
@@ -189,78 +127,24 @@ struct CategoryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(.subheadline, design: .rounded))
-                .fontWeight(isSelected ? .bold : .medium)
-                .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.blue : Color(.systemGray6))
-                .foregroundColor(isSelected ? .white : .primary)
+                .padding(.horizontal, 16)
+                .background(isSelected ? Color.blue : Color.clear)
+                .foregroundColor(isSelected ? .white : .blue)
                 .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(Color.blue, lineWidth: 1)
+                )
         }
     }
 }
 
-// Add this new view for grid items
-struct GridSkillPostView: View {
-    let post: SkillPost
+struct SearchView_Previews: PreviewProvider {
+    @State static var selectedTab = 0
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // User Info
-            HStack {
-                Image(systemName: "person.circle.fill")
-                    .resizable()
-                    .frame(width: 24, height: 24)
-                    .foregroundColor(.gray)
-                Text(post.userName)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Spacer()
-            }
-            
-            // Skills
-            VStack(alignment: .leading, spacing: 4) {
-                SkillTag(text: post.offeringSkill, type: .offering)
-                SkillTag(text: post.seekingSkill, type: .seeking)
-            }
-            
-            // Time
-            Text(post.timePosted.timeAgo())
-                .font(.caption)
-                .foregroundColor(.gray)
-            
-            // Interaction Buttons
-            HStack(spacing: 16) {
-                Button(action: {}) {
-                    Image(systemName: "message")
-                        .foregroundColor(.gray)
-                }
-                Button(action: {}) {
-                    Image(systemName: "star")
-                        .foregroundColor(.gray)
-                }
-            }
-            .font(.subheadline)
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+    static var previews: some View {
+        SearchView(selectedTab: $selectedTab)
     }
 }
 
-// Add this view for empty search results
-struct EmptySearchView: View {
-    let searchText: String
-    
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 50))
-                .foregroundColor(.gray)
-            Text("No skills found matching '\(searchText)'")
-                .foregroundColor(.gray)
-        }
-        .padding(.top, 100)
-    }
-}
