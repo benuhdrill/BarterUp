@@ -1,130 +1,97 @@
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
-struct SignupView: View {
-    @EnvironmentObject var authManager: AuthenticationManager
-    @State private var username: String = ""
-    @State private var password: String = ""
-    @State private var confirmPassword: String = ""
-    @State private var errorMessage: String = ""
-    @State private var isError: Bool = false
-    @State private var shouldNavigateToHome: Bool = false
+struct SignUpView: View {
+    @State private var email = ""
+    @State private var password = ""
+    @State private var username = ""
+    @State private var errorMessage = ""
     
-    private func validateInput() -> Bool {
-        // Check if username is empty
-        if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            errorMessage = "Please enter a username"
-            isError = true
-            return false
-        }
-        
-        // Check if password is empty
-        if password.isEmpty {
-            errorMessage = "Please enter a password"
-            isError = true
-            return false
-        }
-        
-        // Check minimum password length
-        if password.count < 6 {
-            errorMessage = "Password must be at least 6 characters"
-            isError = true
-            return false
-        }
-        
-        // Check if passwords match
-        if password != confirmPassword {
-            errorMessage = "Passwords do not match"
-            isError = true
-            return false
-        }
-        
-        return true
-    }
+    private let db = Firestore.firestore()
     
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 30) {
-                Text("Create Account")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.top, 60)
-                
-                TextField("Username", text: $username)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal, 20)
-                    .autocapitalization(.none)
-                
-                SecureField("Password", text: $password)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal, 20)
-                    .textContentType(.oneTimeCode)
-                
-                SecureField("Confirm Password", text: $confirmPassword)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .padding(.horizontal, 20)
-                    .textContentType(.oneTimeCode)
-                
-                if isError {
-                    Text(errorMessage)
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 20)
-                }
-                
-                Button(action: {
-                    Task {
-                        if validateInput() {
-                            await signUpAnonymously()
-                        }
-                    }
-                }) {
-                    Text("Sign Up")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                        .padding(.horizontal, 20)
-                }
-                
-                Spacer()
+        VStack(spacing: 20) {
+            TextField("Email", text: $email)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .autocapitalization(.none)
+                .keyboardType(.emailAddress)
+            
+            TextField("Username", text: $username)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .autocapitalization(.none)
+            
+            SecureField("Password", text: $password)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+            
+            if !errorMessage.isEmpty {
+                Text(errorMessage)
+                    .foregroundColor(.red)
             }
-            .padding(.bottom, 40)
-            .background(Color(UIColor.systemGroupedBackground))
-            .edgesIgnoringSafeArea(.all)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationBarHidden(true)
-            .navigationDestination(isPresented: $shouldNavigateToHome) {
-                HomeView()
+            
+            Button("Sign Up") {
+                signUp()
             }
+            .disabled(email.isEmpty || password.isEmpty || username.isEmpty)
         }
+        .padding()
     }
     
-    @MainActor
-    private func signUpAnonymously() async {
-        do {
-            let result = try await Auth.auth().signInAnonymously()
-            let user = result.user
+    private func signUp() {
+        // First create the auth user
+        Auth.auth().createUser(withEmail: email, password: password) { result, error in
+            if let error = error {
+                errorMessage = error.localizedDescription
+                return
+            }
             
-            // Update the user's display name
-            let changeRequest = user.createProfileChangeRequest()
-            changeRequest.displayName = username
-            try await changeRequest.commitChanges()
+            guard let user = result?.user else { return }
             
-            print("User signed up anonymously with username: \(username)")
-            shouldNavigateToHome = true
-        } catch {
-            print("Error signing up: \(error.localizedDescription)")
-            errorMessage = "Error creating account. Please try again."
-            isError = true
+            // Now check if username is available
+            db.collection("users")
+                .whereField("username", isEqualTo: username)
+                .getDocuments { snapshot, error in
+                    if let error = error {
+                        errorMessage = "Error checking username: \(error.localizedDescription)"
+                        return
+                    }
+                    
+                    if let documents = snapshot?.documents, !documents.isEmpty {
+                        // If username is taken, delete the auth user we just created
+                        user.delete { error in
+                            if let error = error {
+                                print("Error deleting user: \(error.localizedDescription)")
+                            }
+                        }
+                        errorMessage = "Username already taken"
+                        return
+                    }
+                    
+                    // Username is available, create user document
+                    let userData: [String: Any] = [
+                        "email": email,
+                        "username": username,
+                        "createdAt": FieldValue.serverTimestamp(),
+                        "skillsOffered": [],
+                        "skillsWanted": []
+                    ]
+                    
+                    db.collection("users").document(user.uid).setData(userData) { error in
+                        if let error = error {
+                            errorMessage = "Error saving user data: \(error.localizedDescription)"
+                        } else {
+                            // Successfully created user and saved data
+                            print("✅ User created successfully")
+                            // You might want to dismiss the view or navigate somewhere here
+                        }
+                    }
+                }
         }
     }
 }
 
-struct SignupView_Previews: PreviewProvider {
+struct SignUpView_Previews: PreviewProvider {
     static var previews: some View {
-        SignupView()
+        SignUpView()
     }
 }
-
-

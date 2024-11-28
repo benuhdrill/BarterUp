@@ -4,7 +4,7 @@ import FirebaseCore
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @State private var username: String = ""
+    @State private var email: String = ""
     @State private var password: String = ""
     @State private var errorMessage: String = ""
     @State private var isError: Bool = false
@@ -13,9 +13,9 @@ struct LoginView: View {
 
     // Validate input before attempting login
     private func validateInput() -> Bool {
-        // Check if username is empty
-        if username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            errorMessage = "Please enter a username"
+        // Check if email is empty
+        if email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            errorMessage = "Please enter an email"
             isError = true
             return false
         }
@@ -23,13 +23,6 @@ struct LoginView: View {
         // Check if password is empty
         if password.isEmpty {
             errorMessage = "Please enter a password"
-            isError = true
-            return false
-        }
-        
-        // Check minimum password length
-        if password.count < 6 {
-            errorMessage = "Password must be at least 6 characters"
             isError = true
             return false
         }
@@ -45,15 +38,15 @@ struct LoginView: View {
                     .fontWeight(.bold)
                     .padding(.top, 60)
 
-                TextField("Username", text: $username)
+                TextField("Email", text: $email)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal, 20)
                     .autocapitalization(.none)
+                    .keyboardType(.emailAddress)
 
                 SecureField("Password", text: $password)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal, 20)
-                    .textContentType(.oneTimeCode)
 
                 if isError {
                     Text(errorMessage)
@@ -64,7 +57,7 @@ struct LoginView: View {
                 Button(action: {
                     Task {
                         if validateInput() {
-                            await signInAnonymously()
+                            await signIn()
                         }
                     }
                 }) {
@@ -77,7 +70,7 @@ struct LoginView: View {
                         .padding(.horizontal, 20)
                 }
 
-                NavigationLink(destination: SignupView()) {
+                NavigationLink(destination: SignUpView()) {
                     Text("Create Account")
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -101,21 +94,14 @@ struct LoginView: View {
     }
 
     @MainActor
-    private func signInAnonymously() async {
+    private func signIn() async {
         do {
-            let result = try await Auth.auth().signInAnonymously()
-            let user = result.user
-            
-            // Update the user's display name
-            let changeRequest = user.createProfileChangeRequest()
-            changeRequest.displayName = username
-            try await changeRequest.commitChanges()
-            
-            print("User signed in anonymously with username: \(username)")
+            let result = try await Auth.auth().signIn(withEmail: email, password: password)
+            print("✅ User signed in successfully")
             shouldNavigateToHome = true
         } catch {
             print("Error signing in: \(error.localizedDescription)")
-            errorMessage = "Error signing in. Please try again."
+            errorMessage = "Invalid email or password. Please try again."
             isError = true
         }
     }

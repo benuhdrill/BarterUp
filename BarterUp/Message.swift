@@ -6,13 +6,31 @@
 //
 
 import SwiftUI
+import FirebaseFirestoreSwift
+import FirebaseAuth
 
-struct Message: View {
-    var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+struct Message: Identifiable, Codable, Equatable {
+    @DocumentID var id: String?
+    let senderId: String
+    let senderName: String
+    let receiverId: String
+    let receiverName: String
+    let content: String
+    let timestamp: Date
+    var isRead: Bool?
+    
+    var isFromCurrentUser: Bool {
+        return senderId == Auth.auth().currentUser?.uid
     }
-}
-
-#Preview {
-    Message()
+    
+    static func == (lhs: Message, rhs: Message) -> Bool {
+        return lhs.id == rhs.id &&
+               lhs.senderId == rhs.senderId &&
+               lhs.senderName == rhs.senderName &&
+               lhs.receiverId == rhs.receiverId &&
+               lhs.receiverName == rhs.receiverName &&
+               lhs.content == rhs.content &&
+               lhs.timestamp == rhs.timestamp &&
+               lhs.isRead == rhs.isRead
+    }
 }

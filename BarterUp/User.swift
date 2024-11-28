@@ -5,14 +5,20 @@
 //  Created by Ben Gmach on 11/26/24.
 //
 
-import SwiftUI
+import FirebaseFirestoreSwift
 
-struct User: View {
-    var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+struct User: Codable, Identifiable {
+    @DocumentID var id: String?
+    let email: String
+    let username: String
+    var skillsOffered: [String]
+    var skillsWanted: [String]
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case username
+        case skillsOffered
+        case skillsWanted
     }
-}
-
-#Preview {
-    User()
 }

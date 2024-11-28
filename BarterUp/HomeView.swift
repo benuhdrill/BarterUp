@@ -9,6 +9,7 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseFirestoreSwift
+
 // Add this struct for the skill post model
 struct SkillPost: Identifiable, Codable {
     let id: String
@@ -20,6 +21,7 @@ struct SkillPost: Identifiable, Codable {
     let details: String
     var isStarred: Bool
     var isLiked: Bool
+    var likesCount: Int
     
     // Add initializer for Firestore
     init(id: String = UUID().uuidString,
@@ -30,7 +32,8 @@ struct SkillPost: Identifiable, Codable {
          seekingSkill: String,
          details: String,
          isStarred: Bool = false,
-         isLiked: Bool = false) {
+         isLiked: Bool = false,
+         likesCount: Int = 0) {
         self.id = id
         self.userId = userId
         self.userName = userName
@@ -40,6 +43,7 @@ struct SkillPost: Identifiable, Codable {
         self.details = details
         self.isStarred = isStarred
         self.isLiked = isLiked
+        self.likesCount = likesCount
     }
 }
 
@@ -127,6 +131,14 @@ struct HomeView: View {
                     Text("Messages")
                 }
                 .tag(3)
+            
+            // Add Profile Tab
+            ProfileView()
+                .tabItem {
+                    Image(systemName: "person.fill")
+                    Text("Profile")
+                }
+                .tag(4)
         }
         .sheet(isPresented: $showNewPostSheet) {
             NewSkillPostView(onPost: { offering, seeking, details in
@@ -169,9 +181,9 @@ struct HomeView: View {
     
     // Update addNewPost function
     private func addNewPost(offering: String, seeking: String, details: String) {
-        guard let currentUser = Auth.auth().currentUser else { 
+        guard let currentUser = Auth.auth().currentUser else {
             print("No current user")
-            return 
+            return
         }
         
         print("Creating post with offering: \(offering), seeking: \(seeking)") // Debug print
@@ -227,6 +239,7 @@ struct SkillPostView: View {
     @State private var isPressed = false
     @State private var isStarred = false
     @State private var showChatView = false
+    private let db = Firestore.firestore()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -271,24 +284,24 @@ struct SkillPostView: View {
             // Interaction Buttons
             HStack(spacing: 32) {
                 Button(action: {
-                    sendInitialMessage()
+                    startChat(with: post)
                     selectedTab = 3  // Switch to Messages tab
                 }) {
                     Label("Message", systemImage: "message")
                         .foregroundColor(.gray)
                 }
-                Button(action: {}) {
-                    Label("45", systemImage: "arrow.2.squarepath")
-                        .foregroundColor(.gray)
-                }
                 Button(action: {
                     withAnimation(.spring()) {
-                        isPressed.toggle()
+                        var updatedPost = post
+                        updatedPost.isLiked.toggle()
+                        updatedPost.likesCount += updatedPost.isLiked ? 1 : -1
+                        onUpdate(updatedPost)
+                        updatePostInFirestore(updatedPost)
                     }
                 }) {
-                    Label("234", systemImage: "heart")
-                        .foregroundColor(isPressed ? .red : .gray)
-                        .scaleEffect(isPressed ? 1.2 : 1.0)
+                    Label("\(post.likesCount)", systemImage: "heart")
+                        .foregroundColor(post.isLiked ? .red : .gray)
+                        .scaleEffect(post.isLiked ? 1.2 : 1.0)
                 }
                 Button(action: {}) {
                     Label("", systemImage: "square.and.arrow.up")
@@ -301,21 +314,79 @@ struct SkillPostView: View {
         .padding()
     }
     
-    private func sendInitialMessage() {
+    private func startChat(with post: SkillPost) {
         guard let currentUser = Auth.auth().currentUser else { return }
         
+        // Create conversation ID by combining both user IDs (sorted to ensure consistency)
+        let userIds = [currentUser.uid, post.userId].sorted()
+        let conversationId = userIds.joined(separator: "_")
+        
+        // Create initial message
         let message = Message(
             senderId: currentUser.uid,
+            senderName: currentUser.displayName ?? "Anonymous",
             receiverId: post.userId,
+            receiverName: post.userName,
             content: "Hi! I'm interested in exchanging skills!",
             timestamp: Date(),
-            senderName: currentUser.displayName ?? "Anonymous"
+            isRead: false
         )
         
+        // Reference to the conversation document
+        let conversationRef = db.collection("conversations").document(conversationId)
+        
+        // Start a batch write
+        let batch = db.batch()
+        
+        // Add message to a new document with auto-generated ID
+        let messageRef = db.collection("messages").document()
+        
         do {
-            try Firestore.firestore().collection("messages").addDocument(from: message)
+            try batch.setData(from: message, forDocument: messageRef)
+            
+            // Update or create conversation for current user
+            let currentUserConversation = [
+                "otherUserId": post.userId,
+                "otherUserName": post.userName,
+                "lastMessage": message.content,
+                "timestamp": message.timestamp,
+                "unreadCount": 0
+            ] as [String : Any]
+            
+            // Update or create conversation for other user
+            let otherUserConversation = [
+                "otherUserId": currentUser.uid,
+                "otherUserName": currentUser.displayName ?? "Anonymous",
+                "lastMessage": message.content,
+                "timestamp": message.timestamp,
+                "unreadCount": 1
+            ] as [String : Any]
+            
+            // Add both conversation documents
+            batch.setData(currentUserConversation, forDocument: db.collection("users").document(currentUser.uid).collection("conversations").document(conversationId))
+            batch.setData(otherUserConversation, forDocument: db.collection("users").document(post.userId).collection("conversations").document(conversationId))
+            
+            // Commit the batch
+            batch.commit { error in
+                if let error = error {
+                    print("Error creating conversation: \(error)")
+                } else {
+                    print("Conversation created successfully")
+                    DispatchQueue.main.async {
+                        selectedTab = 3  // Switch to Messages tab
+                    }
+                }
+            }
         } catch {
-            print("Error sending initial message: \(error)")
+            print("Error preparing message data: \(error)")
+        }
+    }
+    
+    private func updatePostInFirestore(_ post: SkillPost) {
+        do {
+            try db.collection("posts").document(post.id).setData(from: post)
+        } catch {
+            print("Error updating post: \(error)")
         }
     }
 }
@@ -398,4 +469,3 @@ extension Date {
         return formatter.localizedString(for: self, relativeTo: Date())
     }
 }
-

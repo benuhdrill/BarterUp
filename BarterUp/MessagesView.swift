@@ -1,4 +1,5 @@
 //
+//
 //  MessagesView.swift
 //  BarterUp
 //
@@ -10,6 +11,7 @@ import FirebaseAuth
 
 struct MessagesView: View {
     @State private var conversations: [Conversation] = []
+    @State private var selectedConversation: Conversation?
     @Binding var selectedTab: Int
     private let db = Firestore.firestore()
     
@@ -33,49 +35,49 @@ struct MessagesView: View {
     }
     
     private func listenForConversations() {
-        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        guard let currentUserId = Auth.auth().currentUser?.uid else { 
+            print("⚠️ No current user ID")
+            return 
+        }
         
-        db.collection("messages")
-            .whereFilter(Filter.orFilter([
-                Filter.whereField("senderId", isEqualTo: currentUserId),
-                Filter.whereField("receiverId", isEqualTo: currentUserId)
-            ]))
+        print("👤 Starting to listen for conversations...")
+        print("👤 Current User ID: \(currentUserId)")
+        
+        // Verify the path
+        let conversationsRef = db.collection("users")
+            .document(currentUserId)
+            .collection("conversations")
+        
+        print("🔍 Listening at path: \(conversationsRef.path)")
+        
+        conversationsRef
             .order(by: "timestamp", descending: true)
             .addSnapshotListener { snapshot, error in
-                guard let documents = snapshot?.documents else {
-                    print("Error fetching conversations: \(error?.localizedDescription ?? "Unknown error")")
+                if let error = error {
+                    print("❌ Error fetching conversations: \(error.localizedDescription)")
+                    print("❌ Full error: \(error)")
                     return
                 }
                 
-                let messages = documents.compactMap { try? $0.data(as: Message.self) }
-                let groupedMessages = Dictionary(grouping: messages) { message -> String in
-                    if message.senderId == currentUserId {
-                        return message.receiverId
-                    } else {
-                        return message.senderId
-                    }
+                guard let documents = snapshot?.documents else {
+                    print("📭 No conversations found (documents is nil)")
+                    return
                 }
                 
-                self.conversations = groupedMessages.compactMap { userId, messages in
-                    guard let lastMessage = messages.first else { return nil }
-                    
-                    let otherUserName: String
-                    if lastMessage.senderId == currentUserId {
-                        otherUserName = messages.first { $0.receiverId == userId }?.senderName ?? "Unknown"
-                    } else {
-                        otherUserName = lastMessage.senderName
+                print("📨 Found \(documents.count) conversations")
+                
+                self.conversations = documents.compactMap { document -> Conversation? in
+                    do {
+                        let conversation = try document.data(as: Conversation.self)
+                        print("✅ Successfully parsed conversation: \(conversation.otherUserName)")
+                        print("🆔 Conversation ID: \(conversation.id ?? "no id")")
+                        return conversation
+                    } catch {
+                        print("❌ Error parsing conversation: \(error)")
+                        print("📄 Raw document data: \(document.data())")
+                        return nil
                     }
-                    
-                    return Conversation(
-                        id: userId,
-                        otherUserId: userId,
-                        otherUserName: otherUserName,
-                        lastMessage: lastMessage.content,
-                        timestamp: lastMessage.timestamp,
-                        unreadCount: messages.filter { $0.receiverId == currentUserId }.count
-                    )
                 }
-                .sorted { $0.timestamp > $1.timestamp }
             }
     }
 }
@@ -118,13 +120,4 @@ struct ConversationRow: View {
         }
         .padding(.vertical, 8)
     }
-}
-
-struct Conversation: Identifiable {
-    let id: String
-    let otherUserId: String
-    let otherUserName: String
-    let lastMessage: String
-    let timestamp: Date
-    let unreadCount: Int
 }

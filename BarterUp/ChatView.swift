@@ -15,26 +15,22 @@ struct ChatView: View {
     @Environment(\.dismiss) var dismiss
     @State private var messageText = ""
     @State private var messages: [Message] = []
+    @State private var scrollProxy: ScrollViewProxy?
     private let db = Firestore.firestore()
     
     var body: some View {
         VStack(spacing: 0) {
             // Header with back button
             HStack {
-                Button(action: {
-                    dismiss()
-                }) {
+                Button(action: { dismiss() }) {
                     HStack {
                         Image(systemName: "chevron.left")
                         Text("Back")
                     }
                 }
                 Spacer()
-                
-                // User Info
                 Text(otherUserName)
                     .font(.headline)
-                
                 Spacer()
             }
             .padding()
@@ -47,18 +43,18 @@ struct ChatView: View {
                     LazyVStack(spacing: 8) {
                         ForEach(messages) { message in
                             MessageBubble(message: message)
-                                .id(message.id ?? UUID().uuidString)
+                                .id(message.id)
                         }
                     }
                     .padding(.horizontal)
                     .padding(.top, 8)
                 }
-                .onChange(of: messages.count) { _ in
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        if let lastMessage = messages.last {
-                            proxy.scrollTo(lastMessage.id ?? "", anchor: .bottom)
-                        }
-                    }
+                .onAppear {
+                    scrollProxy = proxy
+                    scrollToBottom()
+                }
+                .onChange(of: messages) { _ in
+                    scrollToBottom()
                 }
             }
             
@@ -68,9 +64,7 @@ struct ChatView: View {
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .padding(.horizontal)
                 
-                Button(action: {
-                    sendMessage()
-                }) {
+                Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
                         .foregroundColor(messageText.isEmpty ? .gray : .blue)
                 }
@@ -84,36 +78,100 @@ struct ChatView: View {
         .navigationBarHidden(true)
         .onAppear {
             listenForMessages()
+            markMessagesAsRead()
+        }
+    }
+    
+    private func scrollToBottom() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            if let lastMessage = messages.last {
+                scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+            }
         }
     }
     
     private func sendMessage() {
         guard let currentUser = Auth.auth().currentUser,
-              !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
+              !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
-        let messageId = UUID().uuidString
+        print("🚀 Starting to send message...")
+        
+        // Create conversation ID
+        let userIds = [currentUser.uid, otherUserId].sorted()
+        let conversationId = userIds.joined(separator: "_")
+        
+        // Create the message
         let message = Message(
-            id: messageId,
             senderId: currentUser.uid,
+            senderName: currentUser.displayName ?? "Anonymous",
             receiverId: otherUserId,
-            content: messageText,
+            receiverName: otherUserName,
+            content: messageText.trimmingCharacters(in: .whitespacesAndNewlines),
             timestamp: Date(),
-            senderName: currentUser.displayName ?? "Anonymous"
+            isRead: false
         )
         
-        messages.append(message)
+        // Start a batch write
+        let batch = db.batch()
         
-        let messageToSend = messageText
-        messageText = ""
+        // 1. Add message to messages collection
+        let messageRef = db.collection("messages").document()
         
         do {
-            try db.collection("messages").document(messageId).setData(from: message)
+            try batch.setData(from: message, forDocument: messageRef)
+            print("✍️ Added message to batch")
+            
+            // 2. Create/Update sender's conversation document
+            let senderConversationRef = db.collection("users")
+                .document(currentUser.uid)
+                .collection("conversations")
+                .document(conversationId)
+            
+            let senderConversationData: [String: Any] = [
+                "otherUserId": otherUserId,
+                "otherUserName": otherUserName,
+                "lastMessage": message.content,
+                "timestamp": message.timestamp,
+                "unreadCount": 0
+            ]
+            
+            batch.setData(senderConversationData, forDocument: senderConversationRef)
+            print("✍️ Added sender conversation to batch at path: \(senderConversationRef.path)")
+            
+            // 3. Create/Update receiver's conversation document
+            let receiverConversationRef = db.collection("users")
+                .document(otherUserId)
+                .collection("conversations")
+                .document(conversationId)
+            
+            let receiverConversationData: [String: Any] = [
+                "otherUserId": currentUser.uid,
+                "otherUserName": currentUser.displayName ?? "Anonymous",
+                "lastMessage": message.content,
+                "timestamp": message.timestamp,
+                "unreadCount": 1
+            ]
+            
+            batch.setData(receiverConversationData, forDocument: receiverConversationRef)
+            print("✍️ Added receiver conversation to batch at path: \(receiverConversationRef.path)")
+            
+            // 4. Commit the batch
+            batch.commit { error in
+                if let error = error {
+                    print("❌ Error in batch commit: \(error)")
+                    print("❌ Full error details: \(error.localizedDescription)")
+                } else {
+                    print("✅ Successfully created conversation with ID: \(conversationId)")
+                    print("✅ Check these paths in Firestore:")
+                    print("   - \(senderConversationRef.path)")
+                    print("   - \(receiverConversationRef.path)")
+                    DispatchQueue.main.async {
+                        self.messageText = ""
+                    }
+                }
+            }
         } catch {
-            print("Error sending message: \(error.localizedDescription)")
-            messages.removeLast()
-            messageText = messageToSend
+            print("❌ Error preparing message: \(error)")
         }
     }
     
@@ -132,23 +190,43 @@ struct ChatView: View {
                 ])
             ]))
             .order(by: "timestamp")
-            .addSnapshotListener { snapshot, error in
-                guard let documents = snapshot?.documents else {
-                    print("Error fetching messages: \(error?.localizedDescription ?? "Unknown error")")
+            .addSnapshotListener { querySnapshot, error in
+                guard let snapshot = querySnapshot else {
+                    print("Error listening for messages: \(error?.localizedDescription ?? "No data")")
                     return
                 }
                 
-                let newMessages = documents.compactMap { document -> Message? in
-                    var message = try? document.data(as: Message.self)
-                    if message?.id == nil {
-                        message?.id = document.documentID
+                snapshot.documentChanges.forEach { diff in
+                    if diff.type == .added {
+                        if let message = try? diff.document.data(as: Message.self) {
+                            DispatchQueue.main.async {
+                                if !messages.contains(where: { $0.id == message.id }) {
+                                    messages.append(message)
+                                }
+                            }
+                        }
                     }
-                    return message
+                }
+            }
+    }
+    
+    private func markMessagesAsRead() {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return }
+        
+        let batch = db.batch()
+        
+        db.collection("messages")
+            .whereField("senderId", isEqualTo: otherUserId)
+            .whereField("receiverId", isEqualTo: currentUserId)
+            .whereField("isRead", isEqualTo: false)
+            .getDocuments { snapshot, error in
+                guard let documents = snapshot?.documents else { return }
+                
+                documents.forEach { doc in
+                    batch.updateData(["isRead": true], forDocument: doc.reference)
                 }
                 
-                if newMessages != messages {
-                    messages = newMessages
-                }
+                batch.commit()
             }
     }
 }
