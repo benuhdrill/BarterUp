@@ -40,25 +40,53 @@ struct SkillPostView: View {
                     .foregroundColor(.gray)
             }
             
-            // Skills Exchange with Labels
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Skills Offering")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    SkillTag(text: post.offeringSkill, type: .offering)
-                }
-                
-                Image(systemName: "arrow.right")
+            // Labels in single HStack
+            HStack(spacing: 0) {
+                Text("Skills Offering")
+                    .font(.caption)
                     .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 4)
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Skills Wanted")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                    SkillTag(text: post.seekingSkill, type: .seeking)
-                }
+                Spacer()
+                    .frame(width: 60)
+                
+                Text("Skills Wanted")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 16)
             }
+            
+            // Skills bubbles with centered arrow
+            ZStack {
+                // Main HStack for bubbles
+                HStack(spacing: 0) {
+                    Text(post.offeringSkill)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Theme.primaryGreen.opacity(0.1))
+                        .foregroundColor(Theme.primaryGreen)
+                        .cornerRadius(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    Spacer()
+                        .frame(width: 80)  // Space for arrow
+                    
+                    Text(post.seekingSkill)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Theme.primaryOrange.opacity(0.1))
+                        .foregroundColor(Theme.primaryOrange)
+                        .cornerRadius(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                
+                // Centered arrow
+                Image(systemName: "arrow.right")
+                    .foregroundColor(.blue)
+            }
+            .padding(.vertical, 4)
             
             // Details
             if !post.details.isEmpty {
