@@ -1,65 +1,41 @@
-//
-//  AuthenticationManager.swift
-//  BarterUp
-//
-//  Created by Ben Gmach on 11/26/24.
-//
-
-import SwiftUI
-import FirebaseAuth
-import FirebaseFirestore
-
-class AuthenticationManager: ObservableObject {
-    @Published var isAuthenticated: Bool = false
-    @Published var currentUser: User?
-    @Published var errorMessage: String?
+struct SplashScreenView: View {
+    @State private var isActive = false
+    @State private var size = 0.8
+    @State private var opacity = 0.5
+    @EnvironmentObject var authManager: AuthenticationManager
     
-    private let db = Firestore.firestore()
-    
-    init() {
-        // Add state change listener
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            self?.isAuthenticated = user != nil
-            if let user = user {
-                self?.fetchUserData(userId: user.uid)
+    var body: some View {
+        if isActive {
+            if authManager.isAuthenticated {
+                HomeView()
             } else {
-                self?.currentUser = nil
+                LoginView()
             }
-        }
-    }
-    
-    func signOut() {
-        do {
-            try Auth.auth().signOut()
-            self.currentUser = nil
-            self.isAuthenticated = false
-        } catch {
-            self.errorMessage = error.localizedDescription
-        }
-    }
-    
-    private func fetchUserData(userId: String) {
-        db.collection("users").document(userId).getDocument { [weak self] document, error in
-            if let error = error {
-                self?.errorMessage = error.localizedDescription
-                return
+        } else {
+            VStack {
+                Image("BarterUpLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                
+                Text("BarterUp")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundColor(Theme.primaryGreen)
             }
-            
-            if let document = document, document.exists {
-                do {
-                    let user = try document.data(as: User.self)
-                    DispatchQueue.main.async {
-                        self?.currentUser = user
+            .scaleEffect(size)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeIn(duration: 1.2)) {
+                    self.size = 0.9
+                    self.opacity = 1.0
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    withAnimation {
+                        self.isActive = true
                     }
-                } catch {
-                    self?.errorMessage = "Error decoding user data"
                 }
             }
         }
     }
-    
-    // Helper method to get current user's ID
-    var currentUserId: String? {
-        return Auth.auth().currentUser?.uid
-    }
-} 
+}

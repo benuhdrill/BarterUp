@@ -120,7 +120,7 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 15)
-                .background(Color(UIColor.systemBackground))
+                .background(Color.white)
                 
                 // Content
                 ScrollView(showsIndicators: false) {
@@ -145,13 +145,14 @@ struct HomeView: View {
                                 
                                 Divider()
                             }
-                            .background(Color(UIColor.systemBackground))
+                            .background(Color.white)
                         }
                     }
                 }
-                .background(Color(.systemGroupedBackground))
+                .background(Color.white)
                 .coordinateSpace(name: "refresh")
             }
+            .background(Color.white)
             .tabItem {
                 Image(systemName: "house.fill")
                 Text("Home")
@@ -200,6 +201,7 @@ struct HomeView: View {
             fetchPosts()
             fetchUnreadCount()
         }
+        .preferredColorScheme(.light)
     }
     
     private func fetchPosts() {
@@ -310,3 +312,4 @@ struct HomeView_Previews: PreviewProvider {
         HomeView()
     }
 }
+

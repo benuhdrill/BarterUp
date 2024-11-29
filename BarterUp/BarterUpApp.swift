@@ -8,22 +8,26 @@
 import SwiftUI
 import FirebaseCore
 
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        FirebaseApp.configure()
+        return true
+    }
+}
+
 @main
 struct BarterUpApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authManager = AuthenticationManager()
-    
-    init() {
-        FirebaseApp.configure()
-    }
     
     var body: some Scene {
         WindowGroup {
-            if authManager.isAuthenticated {
-                HomeView()
-            } else {
-                LoginView()
-            }
+            SplashScreenView()
+                .environmentObject(authManager)
+                .onAppear {
+                    Theme.applyTheme()
+                }
         }
-        .environmentObject(authManager)
     }
 }

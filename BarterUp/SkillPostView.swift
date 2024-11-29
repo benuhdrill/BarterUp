@@ -18,12 +18,22 @@ struct SkillPostView: View {
     @State private var isLoading = false
     private let db = Firestore.firestore()
     
+    private var isCurrentUserPost: Bool {
+        guard let currentUserId = Auth.auth().currentUser?.uid else { return false }
+        return post.userId == currentUserId
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // User and Time
             HStack {
+                if isCurrentUserPost {
+                    Image(systemName: "person.circle.fill")
+                        .foregroundColor(Theme.primaryGreen)
+                }
                 Text(post.userName)
                     .font(.headline)
+                    .foregroundColor(isCurrentUserPost ? Theme.primaryGreen : .primary)
+                
                 Spacer()
                 Text(post.timePosted.timeAgo())
                     .font(.caption)
@@ -70,22 +80,24 @@ struct SkillPostView: View {
                     .foregroundColor(post.isLiked ? .red : .gray)
                 }
                 
-                // Message button
-                Button(action: {
-                    isLoading = true
-                    startConversation()
-                }) {
-                    HStack {
-                        Image(systemName: "message")
-                            .foregroundColor(isLoading ? .gray : .blue)
-                        
-                        if isLoading {
-                            ProgressView()
-                                .scaleEffect(0.8)
+                // Message button - only show if not current user's post
+                if !isCurrentUserPost {
+                    Button(action: {
+                        isLoading = true
+                        startConversation()
+                    }) {
+                        HStack {
+                            Image(systemName: "message")
+                                .foregroundColor(isLoading ? .gray : .blue)
+                            
+                            if isLoading {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            }
                         }
                     }
+                    .disabled(isLoading)
                 }
-                .disabled(isLoading)
                 
                 Spacer()
                 
@@ -99,6 +111,12 @@ struct SkillPostView: View {
             }
             .font(.system(size: 16))
         }
+        .padding()
+        .background(Color(.systemBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isCurrentUserPost ? Theme.primaryGreen : Color.gray.opacity(0.2), lineWidth: isCurrentUserPost ? 2 : 1)
+        )
         .sheet(isPresented: $showingChatSheet) {
             if let conversation = conversation {
                 NavigationView {

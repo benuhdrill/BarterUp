@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		B54348662CF8F49100E0C0EA /* ViewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54348652CF8F49100E0C0EA /* ViewComponents.swift */; };
+		B54348682CF900A000E0C0EA /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54348672CF900A000E0C0EA /* SplashScreenView.swift */; };
+		B543486A2CF901ED00E0C0EA /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54348692CF901ED00E0C0EA /* Theme.swift */; };
 		B54B29A22CF3C5C40027E9AA /* BarterUpApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54B29A12CF3C5C40027E9AA /* BarterUpApp.swift */; };
 		B54B29A62CF3C5C70027E9AA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B54B29A52CF3C5C70027E9AA /* Assets.xcassets */; };
 		B54B29A92CF3C5C70027E9AA /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B54B29A82CF3C5C70027E9AA /* Preview Assets.xcassets */; };
@@ -36,6 +38,8 @@
 
 /* Begin PBXFileReference section */
 		B54348652CF8F49100E0C0EA /* ViewComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewComponents.swift; sourceTree = "<group>"; };
+		B54348672CF900A000E0C0EA /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
+		B54348692CF901ED00E0C0EA /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B54B299E2CF3C5C40027E9AA /* BarterUp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BarterUp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B54B29A12CF3C5C40027E9AA /* BarterUpApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarterUpApp.swift; sourceTree = "<group>"; };
 		B54B29A52CF3C5C70027E9AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -103,8 +107,10 @@
 				B5C51DB02CF657C80085D0D5 /* SkillsManager.swift */,
 				B5C51DC42CF674B50085D0D5 /* AddSkillView.swift */,
 				B54348652CF8F49100E0C0EA /* ViewComponents.swift */,
+				B54348672CF900A000E0C0EA /* SplashScreenView.swift */,
 				B5F2A9902CF8E6BE002262A6 /* Models.swift */,
 				B5C51DD02CF8E26F0085D0D5 /* SkillPostView.swift */,
+				B54348692CF901ED00E0C0EA /* Theme.swift */,
 				B5C51DAE2CF654FE0085D0D5 /* SearchView.swift */,
 				B5C51DCA2CF8D2710085D0D5 /* SignInView.swift */,
 				B54B29B12CF3C96D0027E9AA /* SignUpView.swift */,
@@ -217,11 +223,13 @@
 				B5C51DB12CF657C80085D0D5 /* SkillsManager.swift in Sources */,
 				B5C51DAF2CF654FE0085D0D5 /* SearchView.swift in Sources */,
 				B5C51DD12CF8E26F0085D0D5 /* SkillPostView.swift in Sources */,
+				B54348682CF900A000E0C0EA /* SplashScreenView.swift in Sources */,
 				B5C51DC52CF674B50085D0D5 /* AddSkillView.swift in Sources */,
 				B5C51DB92CF65F580085D0D5 /* MessagesView.swift in Sources */,
 				B54B29C12CF63FCD0027E9AA /* AuthenticationManager.swift in Sources */,
 				B54B29BF2CF3DB700027E9AA /* HomeView.swift in Sources */,
 				B5C51DBD2CF673430085D0D5 /* ProfileView.swift in Sources */,
+				B543486A2CF901ED00E0C0EA /* Theme.swift in Sources */,
 				B54B29A22CF3C5C40027E9AA /* BarterUpApp.swift in Sources */,
 				B5C51DCF2CF8E2460085D0D5 /* FavoritesView.swift in Sources */,
 			);
