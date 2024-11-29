@@ -4,8 +4,9 @@ import FirebaseFirestore
 
 struct SignUpView: View {
     @State private var email = ""
-    @State private var password = ""
     @State private var username = ""
+    @State private var password = ""
+    @State private var confirmPassword = ""
     @State private var skillsOffered: [String] = []
     @State private var skillsWanted: [String] = []
     @State private var newSkillOffered = ""
@@ -14,6 +15,14 @@ struct SignUpView: View {
     @State private var errorMessage = ""
     @Environment(\.dismiss) private var dismiss
     
+    private var passwordsMatch: Bool {
+        return password == confirmPassword
+    }
+    
+    private var passwordsNotEmpty: Bool {
+        return !password.isEmpty && !confirmPassword.isEmpty
+    }
+    
     var body: some View {
         NavigationView {
             Form {
@@ -21,8 +30,19 @@ struct SignUpView: View {
                     TextField("Email", text: $email)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    SecureField("Password", text: $password)
                     TextField("Username", text: $username)
+                    SecureField("Password", text: $password)
+                    SecureField("Confirm Password", text: $confirmPassword)
+                    
+                    if passwordsNotEmpty {
+                        HStack {
+                            Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundColor(passwordsMatch ? .green : .red)
+                            Text(passwordsMatch ? "Passwords match" : "Passwords do not match")
+                                .foregroundColor(passwordsMatch ? .green : .red)
+                                .font(.caption)
+                        }
+                    }
                 }
                 
                 Section(header: Text("Skills You Can Offer")) {
@@ -75,7 +95,8 @@ struct SignUpView: View {
                         .padding()
                 }
                 .disabled(email.isEmpty || password.isEmpty || username.isEmpty || 
-                         skillsOffered.isEmpty || skillsWanted.isEmpty)
+                         skillsOffered.isEmpty || skillsWanted.isEmpty ||
+                         !passwordsMatch)
                 .buttonStyle(.borderedProminent)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
@@ -112,6 +133,12 @@ struct SignUpView: View {
     }
     
     private func signUp() {
+        guard password == confirmPassword else {
+            errorMessage = "Passwords do not match"
+            showingError = true
+            return
+        }
+        
         Auth.auth().createUser(withEmail: email, password: password) { result, error in
             if let error = error {
                 errorMessage = error.localizedDescription
