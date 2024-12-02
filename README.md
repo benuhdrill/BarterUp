@@ -65,23 +65,23 @@ BarterUp is a skill-trading app that connects users locally or virtually to exch
 
 **Tab Navigation** (Tab to Screen)
 
-- [ ] Home
-- [ ] Search
-- [ ] Profile
-- [ ] Messages
-- [ ] Favorites
+- [x] Home
+- [x] Search
+- [x] Profile
+- [x] Messages
+- [x] Favorites
 
 **Flow Navigation** (Screen to Screen)
 
-- [ ] **Onboarding Screen**
+- [x] **Onboarding Screen**
   * Leads to [**Home Screen**]
-- [ ] **Home Screen**
+- [x] **Home Screen**
   * Leads to [**Profile Screen**] 
-- [ ] **Profile Details of another user**
+- [x] **Profile Details of another user**
   * Leads to [**Next Screen**]
-- [ ] **Messaging Screen**
+- [x] **Messaging Screen**
   * Leads to [**Chat Details**]
-- [ ] **Favorites Screen**
+- [x] **Favorites Screen**
   * Leads to [**Favorite skills**]
 
 
