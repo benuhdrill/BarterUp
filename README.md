@@ -87,7 +87,7 @@ BarterUp is a skill-trading app that connects users locally or virtually to exch
 
 ## Wireframes
 
-![Screenshot 2024-12-02 at 1.18.19 PM](https://hackmd.io/_uploads/B1Vz5_jmkl.png)
+<img width="945" alt="Screenshot 2024-12-02 at 1 18 19 PM" src="https://github.com/user-attachments/assets/80bc73cb-5510-4fc7-b93b-0f0d3fcedc52">
 
 
 
