@@ -16,6 +16,8 @@ struct Conversation: Identifiable, Codable {
     var lastMessage: String
     var timestamp: Date
     var unreadCount: Int
+    var senderId: String?
+    var senderName: String?
     
     init(id: String, data: [String: Any]) {
         self.id = id
@@ -24,6 +26,8 @@ struct Conversation: Identifiable, Codable {
         self.lastMessage = data["lastMessage"] as? String ?? ""
         self.timestamp = (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
         self.unreadCount = data["unreadCount"] as? Int ?? 0
+        self.senderId = data["senderId"] as? String
+        self.senderName = data["senderName"] as? String
     }
 }
 

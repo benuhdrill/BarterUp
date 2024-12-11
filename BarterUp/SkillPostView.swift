@@ -202,38 +202,69 @@ struct SkillPostView: View {
                     return
                 }
                 
-                // Create new conversation if it doesn't exist
-                let conversationData: [String: Any] = [
-                    "lastMessage": "",
-                    "timestamp": Date(),
-                    "otherUserId": post.userId,
-                    "otherUserName": post.userName,
-                    "unreadCount": 0
-                ]
-                
-                db.collection("conversations").document(conversationId).setData([
-                    "participants": [currentUserId, post.userId],
-                    "lastUpdated": Date()
-                ], merge: true) { error in
-                    if let error = error {
-                        print("Error creating conversation: \(error)")
+                // Get current user's data
+                db.collection("users").document(currentUserId).getDocument { currentUserSnapshot, error in
+                    guard let currentUserData = currentUserSnapshot?.data(),
+                          let currentUserName = currentUserData["username"] as? String else {
+                        print("Error getting current user data")
                         isLoading = false
                         return
                     }
                     
-                    db.collection("users")
+                    // Create conversation data for both users
+                    let currentUserConvoData: [String: Any] = [
+                        "lastMessage": "",
+                        "timestamp": Timestamp(date: Date()),
+                        "otherUserId": post.userId,
+                        "otherUserName": post.userName,
+                        "unreadCount": 0
+                    ]
+                    
+                    let otherUserConvoData: [String: Any] = [
+                        "lastMessage": "",
+                        "timestamp": Timestamp(date: Date()),
+                        "otherUserId": currentUserId,
+                        "otherUserName": currentUserName,
+                        "unreadCount": 0
+                    ]
+                    
+                    let batch = db.batch()
+                    
+                    // Set up conversation in main conversations collection
+                    let conversationRef = db.collection("conversations").document(conversationId)
+                    batch.setData([
+                        "participants": [currentUserId, post.userId],
+                        "lastUpdated": Timestamp(date: Date())
+                    ], forDocument: conversationRef)
+                    
+                    // Set up conversation for current user
+                    let currentUserRef = db.collection("users")
                         .document(currentUserId)
                         .collection("conversations")
                         .document(conversationId)
-                        .setData(conversationData, merge: true) { error in
-                            DispatchQueue.main.async {
-                                if error == nil {
-                                    self.conversation = Conversation(id: conversationId, data: conversationData)
-                                    self.showingChatSheet = true
-                                }
+                    batch.setData(currentUserConvoData, forDocument: currentUserRef)
+                    
+                    // Set up conversation for other user
+                    let otherUserRef = db.collection("users")
+                        .document(post.userId)
+                        .collection("conversations")
+                        .document(conversationId)
+                    batch.setData(otherUserConvoData, forDocument: otherUserRef)
+                    
+                    // Commit all changes
+                    batch.commit { error in
+                        DispatchQueue.main.async {
+                            if let error = error {
+                                print("Error creating conversation: \(error)")
                                 self.isLoading = false
+                                return
                             }
+                            
+                            self.conversation = Conversation(id: conversationId, data: currentUserConvoData)
+                            self.showingChatSheet = true
+                            self.isLoading = false
                         }
+                    }
                 }
             }
     }

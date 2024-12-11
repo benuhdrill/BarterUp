@@ -16,9 +16,20 @@ struct MessagesView: View {
     
     var body: some View {
         NavigationView {
-            List(conversations) { conversation in
-                NavigationLink(destination: ChatView(conversation: conversation)) {
-                    ConversationRow(conversation: conversation)
+            List {
+                ForEach(conversations) { conversation in
+                    NavigationLink {
+                        ChatView(conversation: conversation)
+                    } label: {
+                        ConversationRow(conversation: conversation)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            deleteConversation(conversation)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
             .navigationTitle("Messages")
@@ -31,6 +42,8 @@ struct MessagesView: View {
     private func fetchConversations() {
         guard let userId = Auth.auth().currentUser?.uid else { return }
         
+        print("Fetching conversations for user: \(userId)")
+        
         db.collection("users")
             .document(userId)
             .collection("conversations")
@@ -41,50 +54,102 @@ struct MessagesView: View {
                     return
                 }
                 
-                conversations = querySnapshot?.documents.compactMap { document -> Conversation? in
-                    let conversation = Conversation(id: document.documentID, data: document.data())
+                guard let documents = querySnapshot?.documents else {
+                    print("No documents found")
+                    return
+                }
+                
+                print("Found \(documents.count) conversations")
+                
+                conversations = documents.compactMap { document -> Conversation? in
+                    let data = document.data()
+                    print("Conversation data: \(data)")
+                    
+                    let conversation = Conversation(id: document.documentID, data: data)
+                    print("Parsed conversation: \(conversation.otherUserName), message: \(conversation.lastMessage)")
+                    
                     if conversation.otherUserId == userId {
                         return nil
                     }
                     return conversation
-                } ?? []
+                }
+                
+                print("Final conversations count: \(conversations.count)")
+            }
+    }
+    
+    private func deleteConversation(_ conversation: Conversation) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        // Delete from local array
+        if let index = conversations.firstIndex(where: { $0.id == conversation.id }) {
+            conversations.remove(at: index)
+        }
+        
+        // Delete from Firestore
+        db.collection("users")
+            .document(userId)
+            .collection("conversations")
+            .document(conversation.id)
+            .delete() { error in
+                if let error = error {
+                    print("Error deleting conversation: \(error)")
+                }
             }
     }
 }
 
 struct ConversationRow: View {
     let conversation: Conversation
+    @State private var currentUserId = Auth.auth().currentUser?.uid
+    
+    var displayName: String {
+        // If otherUserName is empty, try to use senderName, otherwise show "Unknown User"
+        if !conversation.otherUserName.isEmpty {
+            return conversation.otherUserName
+        } else if let senderName = conversation.senderName {
+            return senderName
+        } else {
+            return "Unknown User"
+        }
+    }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(conversation.otherUserName)
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayName)  // Use computed property instead of direct otherUserName
                     .font(.headline)
-                Spacer()
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                if !conversation.lastMessage.isEmpty {
+                    Text(conversation.lastMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
                 Text(conversation.timestamp.timeAgo())
                     .font(.caption)
                     .foregroundColor(.gray)
-            }
-            
-            if !conversation.lastMessage.isEmpty {
-                Text(conversation.lastMessage)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            
-            if conversation.unreadCount > 0 {
-                Text("\(conversation.unreadCount) new")
-                    .font(.caption)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color.blue)
-                    .cornerRadius(8)
+                
+                if conversation.unreadCount > 0 {
+                    Text("\(conversation.unreadCount)")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }
 
@@ -166,37 +231,84 @@ struct ChatView: View {
         let message = Message(senderId: currentUserId, text: messageText)
         let conversationRef = db.collection("conversations").document(conversation.id)
         
-        do {
-            try conversationRef.collection("messages").document(message.id).setData(from: message)
+        // First, get both users' information
+        let currentUserRef = db.collection("users").document(currentUserId)
+        let otherUserRef = db.collection("users").document(conversation.otherUserId)
+        
+        // Get both users' data
+        let group = DispatchGroup()
+        
+        group.enter()
+        currentUserRef.getDocument { currentSnapshot, error in
+            defer { group.leave() }
+            guard let currentUserData = currentSnapshot?.data(),
+                  let currentUserName = currentUserData["username"] as? String else {
+                print("Error getting current user data")
+                return
+            }
             
-            // Update last message for both users
-            let batch = db.batch()
-            let currentUserConvoRef = db.collection("users")
-                .document(currentUserId)
-                .collection("conversations")
-                .document(conversation.id)
-            
-            let otherUserConvoRef = db.collection("users")
-                .document(conversation.otherUserId)
-                .collection("conversations")
-                .document(conversation.id)
-            
-            let updateData: [String: Any] = [
-                "lastMessage": messageText,
-                "timestamp": Timestamp(date: Date())
-            ]
-            
-            batch.updateData(updateData, forDocument: currentUserConvoRef)
-            
-            var otherUserUpdateData = updateData
-            otherUserUpdateData["unreadCount"] = FieldValue.increment(Int64(1))
-            batch.updateData(otherUserUpdateData, forDocument: otherUserConvoRef)
-            
-            batch.commit()
-            
-            messageText = ""
-        } catch {
-            print("Error sending message: \(error)")
+            group.enter()
+            otherUserRef.getDocument { otherSnapshot, error in
+                defer { group.leave() }
+                guard let otherUserData = otherSnapshot?.data(),
+                      let otherUserName = otherUserData["username"] as? String else {
+                    print("Error getting other user data")
+                    return
+                }
+                
+                do {
+                    // Send the message
+                    try conversationRef.collection("messages").document(message.id).setData(from: message)
+                    
+                    // Update conversation metadata for both users
+                    let batch = db.batch()
+                    
+                    // Current user's conversation data
+                    let currentUserConvoData: [String: Any] = [
+                        "lastMessage": messageText,
+                        "timestamp": Timestamp(date: Date()),
+                        "otherUserId": conversation.otherUserId,
+                        "otherUserName": otherUserName,
+                        "senderId": currentUserId,
+                        "senderName": currentUserName
+                    ]
+                    
+                    // Other user's conversation data
+                    let otherUserConvoData: [String: Any] = [
+                        "lastMessage": messageText,
+                        "timestamp": Timestamp(date: Date()),
+                        "otherUserId": currentUserId,
+                        "otherUserName": currentUserName,
+                        "senderId": currentUserId,
+                        "senderName": currentUserName,
+                        "unreadCount": FieldValue.increment(Int64(1))
+                    ]
+                    
+                    let currentUserConvoRef = db.collection("users")
+                        .document(currentUserId)
+                        .collection("conversations")
+                        .document(conversation.id)
+                    
+                    let otherUserConvoRef = db.collection("users")
+                        .document(conversation.otherUserId)
+                        .collection("conversations")
+                        .document(conversation.id)
+                    
+                    batch.setData(currentUserConvoData, forDocument: currentUserConvoRef, merge: true)
+                    batch.setData(otherUserConvoData, forDocument: otherUserConvoRef, merge: true)
+                    
+                    batch.commit { error in
+                        if let error = error {
+                            print("Error updating conversation: \(error)")
+                        }
+                        DispatchQueue.main.async {
+                            self.messageText = ""
+                        }
+                    }
+                } catch {
+                    print("Error sending message: \(error)")
+                }
+            }
         }
     }
     

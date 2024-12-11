@@ -32,7 +32,11 @@ struct SignUpView: View {
                         .autocorrectionDisabled()
                     TextField("Username", text: $username)
                     SecureField("Password", text: $password)
+                        .textInputAutocapitalization(.never)
+                        .textContentType(.oneTimeCode)
                     SecureField("Confirm Password", text: $confirmPassword)
+                        .textInputAutocapitalization(.never)
+                        .textContentType(.oneTimeCode)
                     
                     if passwordsNotEmpty {
                         HStack {
